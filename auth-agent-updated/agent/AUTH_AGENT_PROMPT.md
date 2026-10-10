@@ -2037,3 +2037,174 @@ detect_network_auth:
 - **Payload Collections**: 14 comprehensive payload files (9 original + 5 new)
 - **Tools**: 8 custom testing scripts (4 original + 4 new)
 - **New Coverage Areas**: Framework middleware bypass, AitM phishing, HTTP/2-3 smuggling, CI/CD OIDC, Kubernetes/service mesh, GraphQL/gRPC/WebSocket, deserialization/SSTI, race conditions, subdomain/CORS/timing, AI/LLM auth exploitation, NTLM/Kerberos/LDAP, cloud IAM escalation, passkey/browser extensions, SCIM/Token Exchange/DPoP
+
+---
+
+# v4.0 Extension — Internet-Sourced Deep Research (2026-10)
+# Original content above is UNCHANGED. This section APPENDS new findings.
+
+## Knowledge Base Extension v4.0 (KB 47-52)
+
+| KB# | File | Coverage |
+|-----|------|----------|
+| 47 | `47-jwt-oauth-advanced-2025.md` | JWT JKU/X5U injection with URL filter bypass, issuer array injection (CVE-2025-30144), algorithm confusion (CVE-2024-54150), OAuth2-Proxy bypass (CVE-2025-54576), CSRF SameSite bypass, OAuth redirect URI chaining (CVE-2024-2419) |
+| 48 | `48-api-gateway-path-normalization.md` | API gateway trailing slash bypass ($12K bounty), double encoding (CVE-2025-66202), double slash (CVE-2025-71399), dot segment traversal, API version downgrade (CVE-2026-23760), mass assignment (API3:2023), GraphQL APQ bypass (CVE-2025-32032) |
+| 49 | `49-http-smuggling-websocket-advanced.md` | CL.TE/TE.CL desync auth bypass, Kestrel chunk extension (CVE-2025-55315), Akamai obs-fold (CVE-2025-32094), HAProxy (CVE-2024-53008), WebSocket auth bypass (CVE-2024-55591), CSWSH, local WebSocket hijacking (CVE-2025-52882) |
+| 50 | `50-ssrf-cloud-metadata-chains.md` | SSRF to IMDSv1/v2, IP encoding bypass (CVE-2026-69192), IPv6 denylist bypass (CVE-2026-44589), DNS rebinding, Ivanti SSRF chains (CVE-2024-21893, CVE-2025-4427/4428), Oracle EBS (CVE-2025-61882), XSS→OAuth chains, IDOR→ATO chains, host header injection |
+| 51 | `51-emerging-auth-threats-2025.md` | AitM phishing (EvilGinx), OAuth device code abuse (EvilTokens), supply chain OAuth theft (Salesloft/Drift), IDE WebSocket hijacking, bearer token leakage (CVE-2025-27152), CORS misconfiguration (CVE-2024-41659), XFF trust bypass |
+| 52 | `52-detection-prevention-matrix.md` | Comprehensive WAF rules (ModSecurity), JWT/OAuth/HTTP/API/Cloud security control tables, tool reference matrix, complete CVE index (30+ CVEs), key recommendations |
+
+## New Payload Files v4.0
+
+| File | Content |
+|------|---------|
+| `payloads/path-normalization-payloads.txt` | Trailing slash, double encoding, double slash, dot segments, case manipulation, semicolon path params, null byte, Unicode normalization, version downgrade paths |
+| `payloads/advanced-chaining-payloads.txt` | SSRF→metadata IP encoding (decimal/octal/hex/IPv6), XSS→OAuth token theft, IDOR→ATO, host header injection, CSRF SameSite bypass, OAuth redirect URI bypass, mass assignment, HTTP smuggling probes, WebSocket hijacking, GraphQL batching, bearer token leakage |
+
+## v4.0 Detection Signatures
+
+### JWT Advanced Detection
+```yaml
+detect_jwt_advanced:
+  jku_x5u_injection:
+    test: "Check JWT headers for jku/x5u fields pointing to external domains"
+    indicators:
+      - jwt_header_contains: "jku"
+      - jwt_header_contains: "x5u"
+    tools: ["jwt_tool -X s", "jwt_tool -X i"]
+    severity: CRITICAL
+    kb_ref: 47
+  issuer_array_injection:
+    test: "Craft JWT with iss as JSON array containing legitimate + attacker issuer"
+    indicators:
+      - jwt_claim_type: "iss is array instead of string"
+    cves: ["CVE-2025-30144"]
+    severity: HIGH
+    kb_ref: 47
+  algorithm_confusion:
+    test: "Change alg from RS256 to HS256, sign with public key as HMAC secret"
+    tools: ["jwt_tool -X k -pk public.pem"]
+    cves: ["CVE-2024-54150"]
+    severity: CRITICAL
+    kb_ref: 47
+  kid_injection:
+    test: "SQL injection or path traversal in kid parameter"
+    payloads: ["key1' UNION SELECT 'known_secret' --", "../../dev/null"]
+    severity: HIGH
+    kb_ref: 47
+```
+
+### API Gateway & Path Normalization Detection
+```yaml
+detect_path_normalization:
+  trailing_slash:
+    test: "Compare auth response for /path vs /path/"
+    severity: CRITICAL
+    kb_ref: 48
+  double_encoding:
+    test: "Send %2561dmin and check if resolves to /admin"
+    cves: ["CVE-2025-66202"]
+    severity: CRITICAL
+    kb_ref: 48
+  double_slash:
+    test: "Send //path and check for auth bypass"
+    cves: ["CVE-2025-71399"]
+    severity: HIGH
+    kb_ref: 48
+  dot_segment_traversal:
+    test: "Send /allowed/../restricted/ and check access"
+    severity: CRITICAL
+    kb_ref: 48
+  version_downgrade:
+    test: "Enumerate API versions (v0/v1/v2/beta/internal) and compare auth"
+    cves: ["CVE-2026-23760"]
+    severity: CRITICAL
+    kb_ref: 48
+```
+
+### HTTP Smuggling & WebSocket Detection
+```yaml
+detect_smuggling_websocket:
+  cl_te_desync:
+    test: "Send CL.TE probe with mismatched Content-Length and Transfer-Encoding"
+    tools: ["smuggler.py", "Burp HTTP Request Smuggler"]
+    severity: CRITICAL
+    kb_ref: 49
+  te_te_obfuscation:
+    test: "Send TE header with obfuscation (xchunked, trailing space, tab)"
+    severity: CRITICAL
+    kb_ref: 49
+  websocket_origin:
+    test: "Connect WebSocket with Origin: https://evil.com"
+    severity: HIGH
+    kb_ref: 49
+  cswsh:
+    test: "Cross-Site WebSocket Hijacking from attacker page"
+    severity: HIGH
+    kb_ref: 49
+  local_ws_hijack:
+    test: "Scan localhost ports for IDE WebSocket servers"
+    cves: ["CVE-2025-52882"]
+    severity: HIGH
+    kb_ref: 49
+```
+
+### SSRF & Chaining Detection
+```yaml
+detect_ssrf_chains:
+  cloud_metadata_ssrf:
+    test: "SSRF to 169.254.169.254 with IP encoding bypasses"
+    bypasses: ["decimal", "octal", "hex", "ipv6", "dns_rebinding", "redirect"]
+    severity: CRITICAL
+    kb_ref: 50
+  xss_oauth_chain:
+    test: "XSS to steal localStorage/sessionStorage OAuth tokens"
+    severity: HIGH
+    kb_ref: 50
+  idor_email_change:
+    test: "Change victim email via IDOR, then password reset"
+    cves: ["CVE-2026-32103"]
+    severity: CRITICAL
+    kb_ref: 50
+  host_header_injection:
+    test: "Inject Host/X-Forwarded-Host in password reset flow"
+    cves: ["CVE-2025-43930"]
+    severity: HIGH
+    kb_ref: 50
+```
+
+### Emerging Threats Detection
+```yaml
+detect_emerging_threats:
+  aitm_phishing:
+    test: "Detect EvilGinx/reverse proxy phishing infrastructure"
+    indicators:
+      - "Transparent TLS proxy with real certificates"
+      - "Session cookie theft post-MFA"
+    severity: CRITICAL
+    kb_ref: 51
+  supply_chain_oauth:
+    test: "Audit third-party OAuth application consents and token scoping"
+    severity: CRITICAL
+    kb_ref: 51
+  bearer_token_leakage:
+    test: "Check for tokens in URLs, Referer headers, redirect chains"
+    cves: ["CVE-2025-27152", "CVE-2026-44883"]
+    severity: HIGH
+    kb_ref: 51
+  xff_trust_bypass:
+    test: "Spoof X-Forwarded-For/X-Real-IP to bypass IP restrictions"
+    cves: ["CVE-2024-47070", "CVE-2024-51504"]
+    severity: CRITICAL
+    kb_ref: 51
+```
+
+## v4.0 Agent Version Information
+
+- **Agent Version**: 4.0.0
+- **Extension Date**: 2026-10-10
+- **Knowledge Base**: 52 research documents (32 original + 14 v3.0 extension + 6 v4.0 deep research)
+- **Payload Collections**: 16 comprehensive payload files (9 original + 5 v3.0 + 2 v4.0)
+- **Tools**: 8 custom testing scripts (4 original + 4 v3.0)
+- **CVE Coverage**: 60+ CVEs with reproduction steps and detection signatures
+- **New v4.0 Coverage**: JWT JKU/X5U injection, issuer array injection, OAuth2-Proxy bypass, API gateway path normalization, HTTP request smuggling, WebSocket auth bypass, SSRF→cloud metadata chains, AitM phishing, supply chain OAuth theft, bearer token leakage, CORS misconfiguration exploitation, mass assignment, GraphQL APQ bypass

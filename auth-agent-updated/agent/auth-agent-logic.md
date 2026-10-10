@@ -2483,3 +2483,300 @@ EXTENDED_WEIGHTS = {
 - AWS IAM Best Practices
 - Azure AD Security Documentation
 - GCP IAM Documentation
+
+---
+
+# v4.0 Extension — Deep Research Decision Trees (2026-10)
+# Original content above is UNCHANGED.
+
+## Section 18: JWT Advanced Attack Decision Tree
+
+```
+START → Check JWT headers for jku/x5u fields
+  ├── jku/x5u present → Test with attacker-controlled JWKS URL
+  │   ├── Server fetches attacker JWKS → CRITICAL: JKU/X5U Injection
+  │   │   └── Chain: Forge token → Privilege escalation → ATO
+  │   └── URL filtered → Try bypass techniques
+  │       ├── Open redirect on trusted domain → Chain redirect to attacker JWKS
+  │       ├── URL parser confusion (@, #, %23) → CVE-2024-2419 style
+  │       └── DNS rebinding → Alternate resolution bypass
+  ├── Check algorithm field
+  │   ├── RS256 endpoint → Test HS256 confusion (CVE-2024-54150)
+  │   │   └── Sign with public key as HMAC secret
+  │   ├── alg:none → Test signature stripping
+  │   └── Multiple algorithms accepted → Test each for weakness
+  ├── Check iss claim type
+  │   ├── String → Normal
+  │   └── Test array injection → iss:["evil.com","legit.com"] (CVE-2025-30144)
+  │       └── If accepted → Token forgery with key redirect
+  ├── Check kid parameter
+  │   ├── Test SQL injection → kid: "key1' UNION SELECT 'secret' --"
+  │   ├── Test path traversal → kid: "../../dev/null"
+  │   └── Test SSRF → kid pointing to external URL
+  └── Check nested JSON handling
+      └── Deep nesting test → 10000-level nested objects (CVE-2025-53864)
+          └── Stack overflow → DoS confirmed
+```
+
+**Reference:** `knowledge-base/47-jwt-oauth-advanced-2025.md`
+
+## Section 19: API Gateway Path Normalization Decision Tree
+
+```
+START → Identify gateway/proxy technology
+  ├── Test trailing slash bypass
+  │   ├── /path returns 401 but /path/ returns 200 → CRITICAL: Auth bypass
+  │   └── Both same → Not vulnerable to trailing slash
+  ├── Test double encoding
+  │   ├── /%2561dmin resolves to /admin → CRITICAL: Double encoding bypass
+  │   ├── /%61dmin resolves to /admin → HIGH: Single encoding bypass
+  │   └── Both blocked → Test triple encoding /%252561dmin
+  ├── Test double slash
+  │   ├── //path bypasses rate limit or auth → HIGH: Double slash bypass (CVE-2025-71399)
+  │   └── Normalized before check → Not vulnerable
+  ├── Test dot segment traversal
+  │   ├── /allowed/../restricted/ accessible → CRITICAL: Dot segment bypass
+  │   ├── Encoded dots /%2e%2e/ work → CRITICAL: Encoded traversal
+  │   └── All normalized → Not vulnerable
+  ├── Test version downgrade
+  │   ├── /api/v1/ vs /api/v2/ → Different auth requirements?
+  │   │   ├── v1 unauthenticated → CRITICAL: Version downgrade (CVE-2026-23760)
+  │   │   └── Same auth → Test /api/beta/, /api/internal/, /api/legacy/
+  │   └── Single version → Not applicable
+  ├── Test semicolon path params (Java/Tomcat)
+  │   └── /admin;jsessionid=fake accessible → HIGH: Path param bypass
+  ├── Test case manipulation
+  │   └── /Admin vs /admin → Different auth? → MEDIUM: Case sensitivity
+  └── Test mass assignment on write endpoints
+      ├── Add role/is_admin/permissions to PUT/PATCH body
+      │   ├── Fields accepted → CRITICAL: Mass assignment (API3:2023)
+      │   └── Rejected → Test nested objects, param pollution
+      └── Check GraphQL for APQ bypass
+          ├── Register arbitrary query via APQ → HIGH: APQ bypass (CVE-2025-32032)
+          └── APQ disabled or hash-verified → Not vulnerable
+```
+
+**Reference:** `knowledge-base/48-api-gateway-path-normalization.md`
+
+## Section 20: HTTP Smuggling & WebSocket Decision Tree
+
+```
+START → Identify proxy/backend technology stack
+  ├── HTTP Smuggling Tests
+  │   ├── CL.TE probe → Send CL:6 + TE:chunked with trailing G
+  │   │   ├── Timeout/error → Potential CL.TE desync
+  │   │   └── Normal → Try TE.CL
+  │   ├── TE.CL probe → Send TE:chunked + CL:3 with smuggled chunk
+  │   │   ├── Second request affected → CRITICAL: TE.CL smuggling
+  │   │   └── Normal → Try TE.TE
+  │   ├── TE.TE obfuscation
+  │   │   ├── Transfer-Encoding: xchunked → Test
+  │   │   ├── Transfer-Encoding: chunked (trailing space) → Test
+  │   │   ├── Transfer-Encoding:[tab]chunked → Test
+  │   │   └── CVE-2025-55315 chunk extension → Test Kestrel
+  │   └── Header normalization (CVE-2025-64484)
+  │       └── X_Forwarded_Email (underscore) → Becomes X-Forwarded-Email?
+  │           ├── Yes → HIGH: Header normalization smuggling
+  │           └── No → Not vulnerable
+  ├── WebSocket Tests
+  │   ├── Test Origin validation
+  │   │   ├── Connect with Origin: https://evil.com
+  │   │   │   ├── Accepted → HIGH: Missing Origin validation
+  │   │   │   └── Rejected → Origin check present
+  │   │   └── Test CSWSH from attacker page
+  │   │       └── Can read WebSocket messages → HIGH: CSWSH
+  │   ├── Test post-handshake auth
+  │   │   ├── Auth only at upgrade → Send privileged messages after
+  │   │   │   ├── Executed → CRITICAL: No per-message auth
+  │   │   │   └── Rejected → Per-message auth present
+  │   │   └── Test with expired/invalid tokens post-handshake
+  │   └── Test local WebSocket servers (IDE extensions)
+  │       ├── Port scan localhost 3000-4000
+  │       │   ├── WebSocket responds → Test for MCP/JSON-RPC
+  │       │   │   └── Commands execute → HIGH: Local WS hijack (CVE-2025-52882)
+  │       │   └── No WebSocket → Not vulnerable
+  │       └── Check for authentication on localhost WS
+  └── Test FortiOS WebSocket (CVE-2024-55591)
+      └── Connect to :8443/jsconsole with crafted token
+```
+
+**Reference:** `knowledge-base/49-http-smuggling-websocket-advanced.md`
+
+## Section 21: SSRF & Vulnerability Chaining Decision Tree
+
+```
+START → Identify SSRF-capable endpoints
+  ├── SSRF to Cloud Metadata
+  │   ├── Direct: http://169.254.169.254/latest/meta-data/ → Works?
+  │   │   ├── Yes → CRITICAL: Direct SSRF to metadata
+  │   │   │   └── Fetch IAM credentials → AWS/Azure/GCP escalation
+  │   │   └── Blocked → Try IP encoding bypasses
+  │   │       ├── Decimal: 2852039166
+  │   │       ├── Octal: 0251.0376.0251.0376
+  │   │       ├── Hex: 0xa9fea9fe
+  │   │       ├── IPv6: [::ffff:169.254.169.254]
+  │   │       ├── IPv6 hex: [::ffff:a9fe:a9fe] (CVE-2026-44589)
+  │   │       ├── Leading zeros: 012.0.0.1 (CVE-2026-69192)
+  │   │       ├── DNS rebinding via rbndr.us
+  │   │       └── Redirect chain: 302 to metadata
+  │   └── IMDSv2? → Need token via PUT with hop limit
+  │       └── Header injection possible? → Set X-aws-ec2-metadata-token
+  ├── XSS → OAuth Token Theft Chain
+  │   ├── Find XSS injection point
+  │   │   ├── Check localStorage for access_token/refresh_token
+  │   │   │   └── Present → Exfiltrate via fetch to attacker server
+  │   │   ├── Check sessionStorage
+  │   │   ├── Check IndexedDB
+  │   │   └── Initiate OAuth popup for silent token capture
+  │   └── Self-XSS + Login CSRF combo
+  ├── IDOR → Email Change → Password Reset → ATO
+  │   ├── Find user management endpoints with sequential IDs
+  │   │   ├── PUT /api/users/{id} accepts cross-user email change?
+  │   │   │   ├── Yes → Change victim email to attacker-controlled
+  │   │   │   │   └── Trigger password reset → ATO (CVE-2026-32103)
+  │   │   │   └── No → Test UUID-based IDOR, param pollution
+  │   │   └── Check if reset token leaked in response body
+  │   └── Test with different auth tokens (cross-account)
+  ├── Host Header Injection → Password Reset Poisoning
+  │   ├── Test Host: evil.com on /forgot-password
+  │   │   ├── Reset link uses injected host → HIGH: Host injection ATO
+  │   │   └── Host header filtered → Try alternatives
+  │   │       ├── X-Forwarded-Host: evil.com
+  │   │       ├── X-Host: evil.com
+  │   │       ├── Forwarded: host=evil.com
+  │   │       ├── Host: legit.com:80@evil.com
+  │   │       └── Host with CRLF injection
+  │   └── CVE-2025-43930 / CVE-2026-27812 patterns
+  └── CSRF + SameSite Bypass → ATO
+      ├── CSRF token present? → Try removing it entirely
+      │   ├── Still works → CSRF protection broken
+      │   └── Fails → Try method override
+      │       ├── GET with _method=POST (SameSite Lax bypass)
+      │       │   ├── Works → HIGH: SameSite bypass (CVE-2024-28143)
+      │       │   └── Fails → Try other frameworks
+      │       └── Test Content-Type: text/plain (avoid CORS preflight)
+      └── Target: password change, email change, MFA disable endpoints
+```
+
+**Reference:** `knowledge-base/50-ssrf-cloud-metadata-chains.md`
+
+## Section 22: Emerging Threats Decision Tree
+
+```
+START → Assess authentication infrastructure
+  ├── AitM Phishing Assessment
+  │   ├── MFA type deployed?
+  │   │   ├── SMS/TOTP → Vulnerable to EvilGinx interception
+  │   │   ├── Push notification → Vulnerable to real-time relay
+  │   │   ├── FIDO2/WebAuthn → Resistant (domain-bound)
+  │   │   └── None → Credential theft without MFA bypass needed
+  │   ├── OAuth Device Code flow enabled?
+  │   │   ├── Yes → Test EvilTokens device code phishing
+  │   │   │   └── Bypasses proxy entirely
+  │   │   └── No / Restricted by Conditional Access → Lower risk
+  │   └── Token Protection / Device binding enabled?
+  │       ├── Yes → Stolen tokens unusable on different device
+  │       └── No → Tokens freely portable
+  ├── Supply Chain OAuth Audit
+  │   ├── List third-party OAuth application consents
+  │   │   ├── Over-scoped permissions → HIGH: Supply chain risk
+  │   │   ├── Monitor for consent from unknown apps
+  │   │   └── Check token usage from unexpected IPs
+  │   └── Salesloft/Drift pattern: 700+ orgs affected
+  ├── Bearer Token Leakage Tests
+  │   ├── Token in URL parameter? (CVE-2026-44883)
+  │   │   └── Yes → Leaks via Referer, logs, history
+  │   ├── Token follows cross-origin redirect? (CVE-2025-27152 Axios)
+  │   │   └── Yes → Authorization header sent to attacker
+  │   └── Token in error messages or debug output?
+  ├── CORS Misconfiguration
+  │   ├── Test reflected Origin with credentials
+  │   │   ├── Reflected + Allow-Credentials: true → CRITICAL
+  │   │   ├── null origin accepted → HIGH
+  │   │   └── Strict allowlist → Not vulnerable
+  │   └── Test regex bypass (e.g., evil-trusted.com)
+  └── X-Forwarded-For Trust Bypass
+      ├── Test XFF: 127.0.0.1 to bypass IP restrictions
+      │   ├── Access granted → CRITICAL: XFF trust (CVE-2024-47070)
+      │   └── Blocked → Test other headers
+      │       ├── X-Real-IP, True-Client-IP, CF-Connecting-IP
+      │       └── Multiple XFF headers (first vs last wins)
+      └── Check if rate limiting uses XFF
+```
+
+**Reference:** `knowledge-base/51-emerging-auth-threats-2025.md`, `knowledge-base/52-detection-prevention-matrix.md`
+
+## v4.0 Extended Priority Scoring
+
+```python
+PRIORITY_SCORES_V4 = {
+    'jku_x5u_injection':          95,  # Complete token forgery
+    'jwt_algorithm_confusion':    90,  # Sign with public key
+    'jwt_issuer_array_injection': 75,  # Type confusion bypass
+    'oauth2_proxy_bypass':        95,  # Complete auth bypass
+    'api_version_downgrade':      90,  # Unprotected legacy endpoints
+    'path_normalization_bypass':  95,  # Gateway auth bypass
+    'double_encoding_bypass':     85,  # Middleware bypass
+    'http_request_smuggling':     90,  # Proxy-level auth bypass
+    'websocket_auth_bypass':      85,  # Post-handshake bypass
+    'cswsh_attack':               70,  # Cross-site WS hijack
+    'ssrf_cloud_metadata':        95,  # IAM credential theft
+    'ip_encoding_bypass':         80,  # SSRF filter evasion
+    'dns_rebinding':              75,  # SSRF validation bypass
+    'xss_oauth_token_theft':      85,  # Token exfiltration
+    'idor_email_change_ato':      90,  # Full account takeover
+    'host_header_injection':      75,  # Password reset poisoning
+    'csrf_samesite_bypass':       70,  # Method override bypass
+    'oauth_redirect_chaining':    80,  # Authorization code theft
+    'mass_assignment':            85,  # Privilege escalation
+    'graphql_apq_bypass':         75,  # Allowlist bypass
+    'graphql_alias_batching':     70,  # Rate limit bypass
+    'aitm_phishing':              90,  # Post-MFA session theft
+    'supply_chain_oauth':         85,  # Third-party token theft
+    'bearer_token_leakage':       65,  # Information disclosure
+    'cors_credential_theft':      75,  # Cross-origin token theft
+    'xff_trust_bypass':           80,  # IP restriction bypass
+    'local_websocket_hijack':     70,  # IDE extension attack
+}
+```
+
+## v4.0 Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 4.0 | 2026-10-10 | Added decision trees for JWT advanced (JKU/X5U, issuer array, algorithm confusion), API gateway path normalization, HTTP smuggling/WebSocket, SSRF chaining, and emerging threats. Extended priority scoring with 27 new attack categories from internet-sourced deep research with 24 adversarially-verified findings. |
+
+## v4.0 CVE References
+
+- CVE-2024-54150 - cjwt Algorithm Confusion (RS256→HS256)
+- CVE-2018-0114 - node-jose Embedded JWK Injection
+- CVE-2025-30144 - fast-jwt Issuer Array Injection
+- CVE-2025-53864 - Nimbus JOSE+JWT Nested JSON DoS
+- CVE-2025-54576 - OAuth2-Proxy Query Parameter Auth Bypass
+- CVE-2024-2419 - Keycloak URL Parser Redirect Bypass
+- CVE-2025-66202 - Astro Double Encoding Path Bypass
+- CVE-2025-71399 - Better Auth Double Slash Bypass
+- CVE-2026-23760 - SmarterMail Version Downgrade
+- CVE-2025-15602 - Snipe-IT Mass Assignment
+- CVE-2025-55315 - ASP.NET Kestrel Chunk Extension Smuggling
+- CVE-2025-32094 - Akamai Obs-fold Smuggling
+- CVE-2024-53008 - HAProxy Message Framing
+- CVE-2024-33452 - Kong/OpenResty HEAD Smuggling
+- CVE-2025-64484 - OAuth2-Proxy Header Normalization
+- CVE-2024-55591 - FortiOS WebSocket Auth Bypass
+- CVE-2025-52882 - Claude Code MCP Local WebSocket Hijack
+- CVE-2024-21893 - Ivanti Connect Secure SSRF via SAML
+- CVE-2025-4427/4428 - Ivanti EPMM Auth Bypass + EL Injection
+- CVE-2025-61882 - Oracle EBS SSRF + XSLT RCE
+- CVE-2026-69192 - Leading-Zero Octet IP Confusion
+- CVE-2026-44589 - IPv6 Denylist Bypass
+- CVE-2025-43930 - Host Header Injection Password Reset
+- CVE-2026-32103 - IDOR Account Takeover
+- CVE-2025-27152 - Axios Credential Leakage via Redirect
+- CVE-2026-44883 - Portainer Token in URL
+- CVE-2024-41659 - Memos CORS Misconfiguration
+- CVE-2024-47070 - authentik XFF Exception Bypass
+- CVE-2024-51504 - ZooKeeper XFF IP Spoofing
+- CVE-2025-32032 - Apollo Router APQ Bypass
+- CVE-2026-35413 - Directus SDL Schema Leak
+- CVE-2026-14916 - Kong JWT Algorithm Confusion

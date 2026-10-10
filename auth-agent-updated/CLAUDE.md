@@ -177,3 +177,49 @@ python tools/cloud-iam-tester.py azure
 python tools/cloud-iam-tester.py gcp
 python tools/cloud-iam-tester.py all
 ```
+
+---
+
+# Extended Architecture (v4.0 - Deep Research - 2026-10)
+# Original content above is UNCHANGED.
+
+## v4.0 Extended Architecture
+
+```
+auth-agent/
+├── knowledge-base/     # 52 research files (32 original + 14 v3.0 + 6 v4.0)
+│   ├── 01-24           # Original core knowledge base
+│   ├── 25-32           # Original advanced knowledge base
+│   ├── 33-46           # v3.0 extension (framework bypass, AitM, K8s, etc.)
+│   ├── 47              # JWT/OAuth advanced attacks (JKU/X5U, issuer array, alg confusion)
+│   ├── 48              # API gateway path normalization (trailing slash, double encoding)
+│   ├── 49              # HTTP smuggling & WebSocket auth bypass (CL.TE, CSWSH)
+│   ├── 50              # SSRF → cloud metadata chains, XSS→OAuth, IDOR→ATO
+│   ├── 51              # Emerging auth threats (AitM, supply chain, token leakage)
+│   └── 52              # Detection & prevention matrix (WAF rules, CVE index)
+├── agent/
+│   ├── AUTH_AGENT_PROMPT.md    # v4.0 - Extended with KB 47-52 references
+│   ├── methodology.md          # v4.0 - Extended with phases 21-25
+│   └── auth-agent-logic.md     # v4.0 - Extended with 5 new decision trees
+├── tools/                      # 8 custom testing scripts
+├── payloads/
+│   ├── [9 original + 5 v3.0 payload files]
+│   ├── path-normalization-payloads.txt     # NEW v4.0 - Gateway bypass payloads
+│   └── advanced-chaining-payloads.txt      # NEW v4.0 - Multi-vector chaining
+└── reports/
+```
+
+## v4.0 Research Phases
+
+| Phase | Focus | Knowledge Base Files |
+|-------|-------|---------------------|
+| 21 | JWT Advanced & Token Forgery | 47-jwt-oauth-advanced-2025.md |
+| 22 | API Gateway Path Normalization | 48-api-gateway-path-normalization.md |
+| 23 | HTTP Smuggling & WebSocket | 49-http-smuggling-websocket-advanced.md |
+| 24 | SSRF Chaining & Multi-Vector ATO | 50-ssrf-cloud-metadata-chains.md |
+| 25 | Emerging Threats & Token Leakage | 51-emerging-auth-threats-2025.md, 52-detection-prevention-matrix.md |
+
+## v4.0 CVE Coverage (30+ new CVEs)
+
+Critical: CVE-2024-54150, CVE-2025-54576, CVE-2026-23760, CVE-2025-55315, CVE-2024-55591, CVE-2024-21893, CVE-2025-61882
+High: CVE-2025-30144, CVE-2025-53864, CVE-2024-2419, CVE-2025-66202, CVE-2025-71399, CVE-2025-52882, CVE-2026-69192, CVE-2025-27152
