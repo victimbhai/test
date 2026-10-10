@@ -1,0 +1,345 @@
+# API Key Parameter Names, Header Names, and Leaked Key Patterns
+# For authorized security testing only
+
+# ============================================================================
+# COMMON API KEY PARAMETER NAMES (Query String)
+# ============================================================================
+
+api_key
+apikey
+api-key
+apiKey
+API_KEY
+APIKEY
+key
+api_token
+apitoken
+api-token
+access_key
+accesskey
+access-key
+accessKey
+secret_key
+secretkey
+secret-key
+secretKey
+auth_key
+authkey
+auth-key
+authKey
+token
+auth_token
+authtoken
+auth-token
+authToken
+access_token
+accesstoken
+access-token
+accessToken
+bearer_token
+app_key
+appkey
+app-key
+appKey
+app_id
+appid
+app-id
+appId
+client_key
+clientkey
+client-key
+clientKey
+client_id
+clientid
+client-id
+clientId
+client_secret
+clientsecret
+client-secret
+clientSecret
+consumer_key
+consumer_secret
+private_key
+public_key
+subscription_key
+subscription-key
+ocp-apim-subscription-key
+x-api-key
+x-auth-token
+x-access-token
+password
+passwd
+pass
+secret
+credentials
+user_key
+private_token
+personal_access_token
+pat
+service_key
+master_key
+signing_key
+encryption_key
+webhook_secret
+signing_secret
+
+# ============================================================================
+# COMMON API KEY HEADER NAMES
+# ============================================================================
+
+Authorization
+X-API-Key
+X-Api-Key
+X-API-KEY
+X-Auth-Token
+X-Access-Token
+X-Auth-Key
+X-Secret-Key
+Api-Key
+Api-Token
+Auth-Token
+Access-Token
+Bearer
+Token
+X-Token
+X-Session-Token
+X-CSRF-Token
+X-Request-Token
+X-App-Key
+X-Client-Key
+X-Client-Id
+X-Client-Secret
+X-Service-Key
+X-Master-Key
+Ocp-Apim-Subscription-Key
+X-Functions-Key
+X-RapidAPI-Key
+X-Mashape-Key
+X-IBM-Client-Id
+X-IBM-Client-Secret
+apikey
+api_key
+
+# ============================================================================
+# API KEY FORMAT PATTERNS (Regex)
+# ============================================================================
+
+# AWS
+# Access Key ID: AKIA[0-9A-Z]{16}
+# Secret Access Key: [0-9a-zA-Z/+]{40}
+AKIA
+ASIA
+AIDA
+AROA
+
+# Google
+# API Key: AIza[0-9A-Za-z_-]{35}
+# OAuth Client ID: [0-9]+-[0-9A-Za-z_]{32}.apps.googleusercontent.com
+AIza
+
+# GitHub
+# Personal Token: ghp_[0-9a-zA-Z]{36}
+# OAuth Token: gho_[0-9a-zA-Z]{36}
+# User-to-server: ghu_[0-9a-zA-Z]{36}
+# Server-to-server: ghs_[0-9a-zA-Z]{36}
+# Refresh Token: ghr_[0-9a-zA-Z]{36}
+ghp_
+gho_
+ghu_
+ghs_
+ghr_
+
+# GitLab
+# Personal Token: glpat-[0-9a-zA-Z_-]{20}
+glpat-
+
+# Slack
+# Bot Token: xoxb-[0-9a-zA-Z-]+
+# User Token: xoxp-[0-9a-zA-Z-]+
+# Webhook: xoxs-[0-9a-zA-Z-]+
+xoxb-
+xoxp-
+xoxs-
+xoxa-
+xoxr-
+
+# Stripe
+# Live: sk_live_[0-9a-zA-Z]{24,}
+# Test: sk_test_[0-9a-zA-Z]{24,}
+# Publishable: pk_live_[0-9a-zA-Z]{24,}
+sk_live_
+sk_test_
+pk_live_
+pk_test_
+rk_live_
+rk_test_
+
+# OpenAI
+# sk-[0-9a-zA-Z]{48}
+sk-
+
+# SendGrid
+# SG.[0-9a-zA-Z_-]{22}.[0-9a-zA-Z_-]{43}
+SG.
+
+# Twilio
+# Account SID: AC[0-9a-f]{32}
+# Auth Token: [0-9a-f]{32}
+AC
+
+# Firebase / FCM
+# AAAA[A-Za-z0-9_-]{7}:[A-Za-z0-9_-]{140}
+AAAA
+
+# HuggingFace
+# hf_[a-zA-Z0-9]{34}
+hf_
+
+# DigitalOcean
+# dop_v1_[0-9a-f]{64}
+dop_v1_
+
+# Shopify
+# shpat_[0-9a-f]{32}
+# shpca_[0-9a-f]{32}
+# shppa_[0-9a-f]{32}
+shpat_
+shpca_
+shppa_
+
+# Heroku
+# [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+
+# Mailgun
+# key-[0-9a-zA-Z]{32}
+key-
+
+# Square
+# sq0csp-[0-9a-zA-Z_-]{43}
+sq0csp-
+sq0atp-
+
+# Discord
+# Bot: [MN][A-Za-z0-9]{23,}.[\w-]{6}.[\w-]{27}
+
+# Telegram Bot
+# [0-9]{8,10}:[0-9A-Za-z_-]{35}
+
+# npm
+# npm_[0-9a-zA-Z]{36}
+npm_
+
+# PyPI
+# pypi-[0-9a-zA-Z_-]{36,}
+pypi-
+
+# Azure
+# Subscription Key: 32 hex characters
+# Storage Key: base64 86 chars + ==
+
+# Datadog
+# dd[a-z0-9]{32}
+
+# Anthropic
+# sk-ant-[0-9a-zA-Z_-]{95}
+sk-ant-
+
+# ============================================================================
+# COMMON API KEY ENVIRONMENT VARIABLE NAMES
+# ============================================================================
+
+API_KEY
+API_SECRET
+API_TOKEN
+SECRET_KEY
+SECRET_TOKEN
+ACCESS_KEY
+ACCESS_SECRET
+ACCESS_TOKEN
+AUTH_KEY
+AUTH_TOKEN
+AUTH_SECRET
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_SESSION_TOKEN
+GOOGLE_API_KEY
+GOOGLE_APPLICATION_CREDENTIALS
+GITHUB_TOKEN
+GITHUB_API_TOKEN
+GITLAB_TOKEN
+SLACK_TOKEN
+SLACK_BOT_TOKEN
+SLACK_WEBHOOK_URL
+STRIPE_SECRET_KEY
+STRIPE_PUBLISHABLE_KEY
+OPENAI_API_KEY
+SENDGRID_API_KEY
+TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN
+FIREBASE_API_KEY
+DATABASE_URL
+DATABASE_PASSWORD
+DB_PASSWORD
+REDIS_URL
+REDIS_PASSWORD
+MONGO_URI
+MONGODB_URI
+JWT_SECRET
+JWT_SIGNING_KEY
+SESSION_SECRET
+ENCRYPTION_KEY
+PRIVATE_KEY
+SSH_PRIVATE_KEY
+DEPLOY_KEY
+NPM_TOKEN
+PYPI_TOKEN
+DOCKER_PASSWORD
+DOCKER_AUTH_CONFIG
+HEROKU_API_KEY
+AZURE_SUBSCRIPTION_KEY
+AZURE_STORAGE_KEY
+CLOUDFLARE_API_KEY
+DIGITALOCEAN_TOKEN
+DATADOG_API_KEY
+SENTRY_DSN
+MAILGUN_API_KEY
+WEBHOOK_SECRET
+
+# ============================================================================
+# SENSITIVE FILE PATHS
+# ============================================================================
+
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+.env.test
+config.json
+config.yaml
+config.yml
+secrets.json
+secrets.yaml
+credentials.json
+service-account.json
+.npmrc
+.pypirc
+.docker/config.json
+docker-compose.yml
+docker-compose.override.yml
+application.properties
+application.yml
+appsettings.json
+appsettings.Development.json
+wp-config.php
+settings.py
+local_settings.py
+.htpasswd
+id_rsa
+id_ed25519
+.ssh/config
+.aws/credentials
+.azure/config
+.gcloud/credentials
+terraform.tfvars
+terraform.tfstate

