@@ -49,3 +49,13 @@ The full shared session note (Confirmed + Candidates + Handoff Signals). You cor
 6. Emit one consolidated chain per proven path back into the note's Confirmed section, tagged `CHAIN`, and hand to `validate`.
 
 Never write "A could chain with B" — prove each hop end-to-end, or report A alone.
+
+## V3 CHAINING PATTERNS (from deep research)
+
+| # | Chain | Description |
+|---|---|---|
+| 1 | JWE Envelope Cloak -> Identity Forgery -> Cross-Service Compromise | Wrap unsigned PlainJWT inside legitimately encrypted JWE (RSA-OAEP-256 + A128GCM) to bypass alg:none detection. Inner PlainJWT carries admin claims. Server decrypts JWE legitimately, processes inner token without signature validation. Forged identity propagates across federated services trusting the same JWT issuer. (CVE-2026-29000 pac4j-jwt) |
+| 2 | Incomplete Patch -> Encoding Evasion -> Algorithm Confusion -> Full Auth Bypass | Prepend U+200B zero-width space or U+FEFF BOM to PEM public key to defeat regex-based key format detection on patched libraries. The invisible prefix prevents the key type regex from matching, re-enabling RS256->HS256 algorithm confusion. Sign forged JWT with the modified public key as HMAC secret, bypass authentication entirely. (CVE-2026-34950, CVE-2026-107722 fast-jwt) |
+| 3 | Exception Swallowing -> Fail-Open Auth -> Admin API -> Infrastructure Compromise | Send JWT with bogus/unrecognized algorithm header (e.g. 'XS512'). Validator's exception handler catches the unknown-algorithm error and defaults to "allow" instead of "deny". Attacker gains unauthenticated access, reaches admin API endpoints, pivots to infrastructure. (CVE-2026-5430 WSO2, CVSS 10.0, CISA KEV) |
+| 4 | Multimodal Input SSRF -> Cloud Credential Theft -> Lateral Cloud Movement | Submit redirect URL via image_url/audio_url to AI/LLM endpoint. Endpoint validates initial public URL, follows 302 redirect to 169.254.169.254 (TOCTOU bypass). Extract IAM credentials from cloud metadata, use temporary credentials to access S3/GCS buckets, databases, or other cloud services. (CVE-2026-63764 LMDeploy, CVSS 9.2) |
+| 5 | GraphQL Directive Collision -> Silent Privilege Escalation -> Subscription Data Exfiltration | Type-level @authentication on root Query/Mutation shadows stricter field-level @authentication directives. Attacker accesses restricted mutations with only read-level permissions. Then exploits unverified connectionParams.jwt in WebSocket subscriptions to bypass @subscriptionsAuthorization, subscribing to admin-only real-time data streams. (CVE-2026-19869, CVE-2026-5423) |

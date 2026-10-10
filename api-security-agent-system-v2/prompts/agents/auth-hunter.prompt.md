@@ -141,3 +141,64 @@ METHODOLOGY:
 - [ ] Device code phishing tested  - [ ] PKCE downgrade tested  - [ ] JWT key injection (kid/jku/x5u/jwk) tested
 - [ ] Refresh token rotation race tested
 - [ ] Session/API-key lifecycle  - [ ] Forge confirmed  - [ ] FP gate  - [ ] Handoffs queued  - [ ] chain run
+
+## DEEP RESEARCH ADDITIONS (v3)
+
+### JWT Fail-Open Testing
+```
+Send JWTs with BOGUS/unsupported algorithm headers — not alg:none, not HS256 —
+use unrecognized strings like 'XS512', 'RS9999', 'FAKE256' to test exception-handling
+code paths in the JWT validator.
+
+METHODOLOGY:
+1. Take a valid JWT and replace the alg header with an unrecognized algorithm string
+   e.g. {"alg": "XS512", "typ": "JWT"}
+2. Send the modified JWT to the API endpoint
+3. If the server returns 200 with a valid response → the validator swallows exceptions
+   and FAILS OPEN when encountering unknown algorithms
+4. This tests a different code path than alg:none — it targets catch blocks that
+   default to "allow" instead of "deny" on exception
+
+CVE-2026-5430 (WSO2, CVSS 10.0, CISA KEV): WSO2 API Manager failed open on
+unrecognized algorithm values, allowing complete authentication bypass.
+```
+
+### JWE Envelope Attack
+```
+Wrap an unsigned PlainJWT inside a legitimately encrypted JWE to bypass alg:none
+detection. Many JWT libraries check for alg:none on the outer token but do not
+re-validate the inner token after JWE decryption.
+
+METHODOLOGY:
+1. Obtain the server's RSA public key from the JWKS endpoint (/.well-known/jwks.json)
+2. Construct a PlainJWT (alg:none) with admin claims (role:admin, sub:target_user)
+3. Wrap the PlainJWT inside a JWE envelope using RSA-OAEP-256 + A128GCM
+4. Send the JWE-wrapped token to the API
+5. If accepted → the server decrypts the JWE legitimately, then processes the
+   inner PlainJWT without validating its signature
+
+CVE-2026-29000 (pac4j-jwt): JWE envelope allowed unsigned PlainJWT payloads
+to bypass all signature validation checks.
+```
+
+### PEM Regex Evasion
+```
+Prepend invisible Unicode characters to PEM keys to defeat regex-based key format
+detection, enabling algorithm confusion attacks even on patched libraries.
+
+METHODOLOGY:
+1. Take the target server's RSA public key in PEM format
+2. Prepend U+200B (zero-width space) or U+FEFF (BOM) before the PEM header
+   e.g. ​-----BEGIN PUBLIC KEY-----
+3. Attempt RS256→HS256 algorithm confusion using the modified PEM key as HMAC secret
+4. The regex-based key type detector fails to match "-----BEGIN PUBLIC KEY-----"
+   due to the invisible prefix, allowing the key to be used as an HMAC secret
+5. If accepted → algorithm confusion succeeds despite patches for the standard attack
+
+CVE-2026-34950, CVE-2026-107722 (fast-jwt npm): Zero-width characters and BOM
+prepended to PEM keys bypassed regex-based key format validation, re-enabling
+algorithm confusion on patched libraries.
+```
+
+### Knowledge Reference
+- `knowledge/oauth-oidc-advanced/chunk-74c-jwt-fail-open-jwe-bypass-agent.md`

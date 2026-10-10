@@ -47,3 +47,60 @@ For complexity/DoS, demonstrate amplification with a *bounded* request and measu
 ## CHECKLIST
 - [ ] Endpoint + introspection  - [ ] Schema mapped  - [ ] Per-op authz (anon/low-priv)  - [ ] node() IDOR
 - [ ] Batching/alias/complexity (bounded)  - [ ] Resolver injection handoff  - [ ] Federation  - [ ] FP gate  - [ ] chain
+
+## DEEP RESEARCH ADDITIONS (v3)
+
+### Directive Authorization Override
+```
+Test if type-level @authentication directives shadow (override) stricter field-level
+@authentication directives on root types. In some GraphQL implementations, adding
+MORE security annotations can paradoxically WEAKEN security.
+
+METHODOLOGY:
+1. Identify GraphQL schemas using directive-based authorization:
+   - @authentication, @authorization, @subscriptionsAuthorization directives
+2. Test for directive collision on root types (Query, Mutation, Subscription):
+   - If a type has @authentication(operations: [READ]) and a field on that type
+     has @authentication(operations: [CREATE, DELETE]), check which takes precedence
+   - The type-level directive may shadow the field-level directive, effectively
+     downgrading CREATE/DELETE protection to READ-only checks
+3. Enumerate all directives on root types vs their fields using introspection
+4. For each field with stricter directives than its parent type:
+   - Attempt the restricted operation with only the type-level permissions
+   - If it succeeds → directive collision is silently weakening security
+5. Impact: adding @authentication to a root type to "protect everything" may
+   actually REMOVE stricter per-field protections
+
+CVE-2026-19869 (@neo4j/graphql, CVSS 7.6): Type-level @authentication directive
+on root types overrode stricter field-level @authentication, allowing unauthorized
+operations.
+```
+
+### Subscription Auth Bypass
+```
+Test WebSocket connectionParams.jwt for signature verification — forged claims
+in subscription connection parameters may bypass @subscriptionsAuthorization
+entirely.
+
+METHODOLOGY:
+1. Establish a WebSocket connection for GraphQL subscriptions
+2. In the connection_init message, provide a JWT in connectionParams:
+   {"type": "connection_init", "payload": {"jwt": "<forged_token>"}}
+3. Test with:
+   a. A JWT with a forged/modified signature
+   b. A JWT with elevated claims (role:admin) but valid structure
+   c. An expired JWT
+   d. A JWT signed with a different key
+4. If the connection is accepted → subscription auth does not properly verify JWTs
+5. Subscribe to privileged subscription types that require @subscriptionsAuthorization
+6. If events are received → @subscriptionsAuthorization is bypassed entirely
+   through unverified connectionParams.jwt
+7. Chain: forged subscription JWT → subscribe to admin events → real-time data
+   exfiltration of privileged information
+
+CVE-2026-5423: Forged connectionParams.jwt bypassed @subscriptionsAuthorization
+signature verification in GraphQL subscription endpoints.
+```
+
+### Knowledge Reference
+- `knowledge/graphql/chunk-28c-graphql-directive-authorization-bypass-agent.md`

@@ -109,6 +109,7 @@ recon ─map─▶ orchestrator ─dispatch─▶ hunters ─findings+handoffs�
 
 V2 expands the system from 12 to 19 agents (7 new specialist hunters) and from 27 to 49 knowledge folders (~220 chunks total). The additions focus on areas frequently seen in modern API assessments that v1 covered only at a surface level:
 
+
 ### 7 New Specialist Hunters
 | Hunter | Focus |
 |---|---|
@@ -128,3 +129,42 @@ V2 expands the system from 12 to 19 agents (7 new specialist hunters) and from 2
 
 ### New Knowledge Folders (22 added)
 Covering: gRPC/protobuf attacks, HTTP/2 smuggling, QUIC/HTTP/3, advanced WebSocket hijacking, CORS bypass techniques, Kubernetes/cloud misconfig, service mesh security, serverless misconfig, OAuth advanced attacks, JWT key injection, SSTI, advanced deserialization, DNS rebinding, file upload attacks, cache deception, gateway security, AI/LLM security, mobile API security, supply-chain API risks, and webhook security.
+
+---
+
+## V3 Deep Research Additions (October 2026)
+
+V3 incorporates adversarially-verified findings from deep internet research into the existing agent system. All additions are appended to existing agent files — no existing content was modified.
+
+### What's New
+- **8 new adversarially-verified attack vectors** from internet research, covering JWT fail-open, JWE envelope bypass, PEM regex evasion, WebSocket upgrade SSRF, AI multimodal input SSRF, shared-parser confusion smuggling, Kestrel scope-changing smuggling, and GraphQL directive authorization override
+- **5 new vulnerability chaining patterns** added to the chain correlation engine, connecting newly discovered attack vectors into end-to-end exploitation paths
+- **3 new security testing tools**: HTTP Terminator (PortSwigger, shared-parser confusion detection), SSRFProtectedHTTPAdapter (MLflow, socket-level SSRF defense pattern), rebind.it (DNS rebinding automation)
+- **10 identified testing methodology gaps** addressed across auth, SSRF, protocol, GraphQL, and AI/LLM hunters
+- **6 new knowledge chunk files** referenced from updated agent prompts
+
+### Updated Stats
+- **~230 knowledge chunks** (was ~220)
+- Covers the OWASP API Top 10, 15+ advanced classes, 7 protocols, 14 frameworks, 9 gateways, 70+ CVEs, 55+ hypothesis tests, and patterns from 299 real disclosed reports
+
+### New CVEs Incorporated
+| CVE | Target | CVSS | Description |
+|---|---|---|---|
+| CVE-2026-5430 | WSO2 API Manager | 10.0 (CISA KEV) | JWT fail-open on unrecognized algorithm values |
+| CVE-2026-29000 | pac4j-jwt | — | JWE envelope allows unsigned PlainJWT bypass |
+| CVE-2026-34950 | fast-jwt (npm) | — | Zero-width character PEM regex evasion |
+| CVE-2026-107722 | fast-jwt (npm) | — | BOM prefix PEM regex evasion |
+| CVE-2026-63078 | Apache Traffic Server | — | Shared-parser confusion request smuggling |
+| CVE-2026-19869 | @neo4j/graphql | 7.6 | Type-level @authentication directive override |
+| CVE-2026-5423 | GraphQL subscriptions | — | connectionParams.jwt signature bypass |
+| CVE-2026-44578 | Next.js | 8.6 | WebSocket upgrade SSRF bypass |
+| CVE-2026-63764 | LMDeploy | 9.2 | Multimodal input SSRF via redirect following |
+| CVE-2025-55315 | .NET 8/9 Kestrel | — | Scope-changing request smuggling across tenants |
+
+### Updated Agent Files
+- `prompts/agents/auth-hunter.prompt.md` — JWT fail-open, JWE envelope, PEM regex evasion
+- `prompts/agents/ssrf-hunter.prompt.md` — WebSocket upgrade SSRF, AI multimodal SSRF, socket-level defense testing
+- `prompts/agents/protocol-hunter.prompt.md` — Shared-parser confusion, Kestrel scope-changing smuggling
+- `prompts/agents/graphql-hunter.prompt.md` — Directive authorization override, subscription auth bypass
+- `prompts/agents/ai-llm-hunter.prompt.md` — Multimodal input SSRF
+- `prompts/commands/chain.prompt.md` — 5 new chaining patterns

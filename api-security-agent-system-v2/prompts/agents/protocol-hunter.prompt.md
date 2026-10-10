@@ -126,3 +126,58 @@ Tool: h2cSmuggler (github.com/BishopFox/h2cSmuggler)
 - [ ] H2C smuggling tested  - [ ] HTTP/2 desync tested  - [ ] QUIC/HTTP/3 probed  - [ ] gRPC reflection checked
 - [ ] WebSocket CSWSH tested  - [ ] GraphQL subscription auth tested
 - [ ] Handoffs queued  - [ ] FP gate  - [ ] chain run
+
+## DEEP RESEARCH ADDITIONS (v3)
+
+### Shared-Parser Confusion (NEW Request Smuggling Class)
+```
+A new request smuggling class where response-parsing logic is reused on incoming
+requests WITHIN A SINGLE SERVER. Unlike traditional CL.TE/TE.CL smuggling that
+exploits disagreements between two different servers (front-end vs back-end),
+shared-parser confusion exploits a single server that uses the same HTTP parser
+for both request and response processing.
+
+METHODOLOGY:
+1. Identify servers that reuse their HTTP response parser for request parsing
+2. Craft requests that exploit response-specific parsing behaviors applied to
+   incoming requests (e.g., response chunked encoding quirks, response header
+   folding, response status-line parsing applied to request lines)
+3. Use HTTP Terminator (PortSwigger) to automate detection:
+   - Sends probe requests designed to trigger shared-parser confusion
+   - Detects when a single server processes request boundaries differently
+     due to response-parsing code paths being invoked
+4. Confirm smuggling: demonstrate that a crafted request causes the server to
+   misinterpret message boundaries, allowing prefix injection into the next
+   request processed by the same connection
+5. Key difference from CL.TE/TE.CL: this works against a SINGLE server, no
+   proxy/gateway mismatch required
+
+CVE-2026-63078 (Apache Traffic Server): Shared-parser confusion allowed request
+smuggling within a single ATS instance. Presented at Black Hat USA 2026.
+Tool: HTTP Terminator (PortSwigger) — automated shared-parser confusion detection.
+```
+
+### Kestrel Scope-Changing Smuggling
+```
+ASP.NET Core Kestrel server scope-changing request smuggling that crosses
+tenant boundaries in multi-tenant applications.
+
+METHODOLOGY:
+1. Identify ASP.NET Core applications running on Kestrel (.NET 8 or .NET 9)
+2. Test for request smuggling that changes the scope/tenant context:
+   - Craft requests that exploit Kestrel's HTTP parsing to smuggle a request
+     that appears to come from a different tenant
+   - The smuggled request inherits the connection's authentication context
+     but targets a different tenant's resources
+3. Test with multi-tenant applications where tenant isolation relies on
+   request-level routing (Host header, path prefix, subdomain)
+4. Confirm: demonstrate that a smuggled request crosses tenant boundaries
+   and accesses another tenant's data or functionality
+5. Impact: tenant isolation bypass in shared-hosting / multi-tenant SaaS
+
+CVE-2025-55315 (.NET 8/9): Kestrel scope-changing smuggling crossed tenant
+boundaries in ASP.NET Core multi-tenant applications.
+```
+
+### Knowledge Reference
+- `knowledge/http2-http3/chunk-73c-shared-parser-confusion-kestrel-smuggling-agent.md`

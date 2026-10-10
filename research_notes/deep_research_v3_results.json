@@ -1,0 +1,272 @@
+{
+  "new_attack_vectors": [
+    {
+      "title": "JWT Fail-Open via Exception Swallowing in Signature Verification",
+      "category": "Authentication Bypass",
+      "description": "CVE-2026-5430 (CVSS 10.0) in WSO2 API Manager 4.1.0-4.6.0 demonstrates a new authentication bypass class distinct from algorithm confusion or key injection. The OAuthAuthenticationInterceptor catches APIManagementException thrown during JWT signature verification for unsupported algorithms and silently swallows it, causing the request to proceed as authenticated. This is NOT an alg:none attack or RS256/HS256 swap -- the exception handling path itself IS the vulnerability. The catch block acts as an implicit allow-all. CISA added it to KEV on 2026-09-24 confirming active exploitation with forged admin tokens. The existing system covers JWT algorithm confusion and key injection but does NOT cover fail-open patterns where the error-handling code path grants access.",
+      "severity": "critical",
+      "confidence": "high",
+      "cves": [
+        "CVE-2026-5430"
+      ],
+      "tools": [
+        "jwt_tool",
+        "curl",
+        "Nuclei"
+      ],
+      "reproduction_steps": "1. Target WSO2 API Manager 4.1.0-4.6.0. Verify update level: cat <WSO2_HOME>/updates/config.json | grep update-level. 2. Craft a JWT with a bogus or unsupported algorithm in the header (not alg:none, not HS256 -- use an unrecognized string like 'XS512'). 3. Set arbitrary claims including admin roles. The signature can be garbage bytes. 4. Send as Bearer token to any protected endpoint. 5. If the server returns 200 OK, the OAuthAuthenticationInterceptor swallowed the APIManagementException and the request proceeded as authenticated. 6. IOC: JWTs with unsupported signing algorithms in access logs.",
+      "sources": [
+        "https://github.com/davidvrns/CVE-2026-5430-WSO2",
+        "https://security.docs.wso2.com/en/latest/security-announcements/security-advisories/2026/WSO2-2026-5328/"
+      ],
+      "defense_bypass": "WAFs inspecting JWT structure pass it because the token is well-formed. Traditional JWT tooling tests known algorithm attacks, not the server's exception-handling behavior for unknown algorithms. The bypass is invisible at the network layer.",
+      "chaining_potential": "Forged admin JWT -> BOLA/BFLA (access any resource as admin) -> SSRF via admin APIs exposing internal service connectivity -> supply chain compromise via configuration poisoning of downstream services."
+    },
+    {
+      "title": "JWE-Wrapped Unsigned JWT Bypass (Encrypted Envelope Hiding alg:none)",
+      "category": "Authentication Bypass",
+      "description": "CVE-2026-29000 in pac4j-jwt (before 4.5.9, 5.7.9, 6.3.3) is a genuinely novel attack that hides an unsigned JWT inside a legitimately encrypted JWE wrapper. When the server decrypts the JWE envelope, the inner token is a PlainJWT (alg:none). The toSignedJWT() method returns null for PlainJWT, and the null check causes the entire signature verification block to be skipped. Despite no verification, claims are extracted and an authenticated user profile is created. This is NOT the classic alg:none attack that modern libraries block. The JWE decryption succeeds legitimately using the server's public key (available via JWKS), giving the unsigned inner token a false veneer of cryptographic protection. The existing system covers alg:none and algorithm confusion but NOT nested token format attacks where encryption hides the lack of signing.",
+      "severity": "critical",
+      "confidence": "high",
+      "cves": [
+        "CVE-2026-29000"
+      ],
+      "tools": [
+        "Python jwcrypto library",
+        "custom JWE construction scripts",
+        "Burp Suite"
+      ],
+      "reproduction_steps": "1. Obtain target server's RSA public key from JWKS endpoint (/.well-known/jwks.json). 2. Using Python jwcrypto: construct an unsigned JWT (PlainJWT, alg:none) with arbitrary claims including ROLE_ADMIN and target user ID. 3. Wrap the unsigned JWT inside a JWE envelope using RSA-OAEP-256 key wrapping and A128GCM content encryption, with content type set to 'JWT'. 4. Send the resulting JWE token as Bearer in Authorization header. 5. Server decrypts JWE (succeeds with its private key), finds PlainJWT inside, toSignedJWT() returns null, verification skipped, claims trusted. 6. Verify by checking response contains data for the forged user/role.",
+      "sources": [
+        "https://github.com/PtechAmanja/CVE-2026-29000-pac4j-jwt-auth-bypass",
+        "https://www.codeant.ai/blogs/pac4j-jwt-authentication-bypass-cve-2026-29000"
+      ],
+      "defense_bypass": "The outer JWE is legitimately encrypted with the server's public key, so network-level inspection sees a valid encrypted token. WAFs checking for alg:none at the outer JWT level miss this because the outer token uses RSA-OAEP-256. Only application-level logging of the inner token type reveals the bypass.",
+      "chaining_potential": "JWE decryption bypass -> arbitrary identity forgery -> privilege escalation to admin -> BOLA across all user accounts. If pac4j is used for SSO across federated services, one bypass compromises all services."
+    },
+    {
+      "title": "Incomplete Patch Bypass: PEM Detection Regex Evasion via Unicode/Whitespace Prefixes",
+      "category": "Authentication Bypass",
+      "description": "CVE-2026-34950 and CVE-2026-107722 in fast-jwt (npm) demonstrate a metaclass vulnerability where the patch itself creates a new vulnerability. The publicKeyPemMatcher regex uses ^ (start-of-string) to detect PEM keys. Prepending whitespace defeats it, causing the key to fall through to HMAC verification (classic algorithm confusion). The v6.2.0 fix added key.trim(), but String.prototype.trim() only strips ECMAScript whitespace. Non-whitespace leading bytes (zero-width Unicode U+200B, BOM U+FEFF, control characters, PGP wrappers) bypass trim() and still defeat PEM detection. The existing system covers algorithm confusion (RS256-to-HS256) but NOT encoding-level evasion of key format detection regexes, and NOT the pattern of incomplete patches creating new bypass paths.",
+      "severity": "critical",
+      "confidence": "high",
+      "cves": [
+        "CVE-2026-34950"
+      ],
+      "tools": [
+        "jwt_tool",
+        "Node.js REPL",
+        "Burp Suite JWT Editor extension"
+      ],
+      "reproduction_steps": "1. Identify app using fast-jwt <= 6.2.2 (check package.json). 2. Obtain server's RSA public key. 3. For whitespace bypass (CVE-2026-34950): prepend \\t or \\n to PEM key string. 4. For Unicode bypass (CVE-2026-107722): prepend U+200B (zero-width space) or U+FEFF (BOM) to PEM key. 5. Craft JWT with alg:HS256. 6. Sign using the modified public key string as HMAC secret. 7. Submit token. The publicKeyPemMatcher regex fails to detect PEM format due to leading characters, key falls through to HMAC path, signature validates. 8. Remediate: upgrade to fast-jwt >= 6.3.0.",
+      "sources": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-34950",
+        "https://advisories.gitlab.com/npm/fast-jwt/CVE-2026-107722/"
+      ],
+      "defense_bypass": "The forged JWT is structurally valid and properly signed (HMAC using public key), so it passes all structural validation. WAFs cannot distinguish a legitimately signed HS256 token from one using a misused key. The encoding-level evasion (Unicode prefixes) is invisible in most logging.",
+      "chaining_potential": "Unicode prefix -> PEM detection bypass -> algorithm confusion -> arbitrary identity forgery -> BOLA/BFLA -> complete account takeover. In Node.js applications using fast-jwt, this is a complete authentication bypass."
+    },
+    {
+      "title": "Shared-Parser Confusion: Response-Parsing Logic Reused on Incoming Requests",
+      "category": "Request Smuggling",
+      "description": "Presented at Black Hat USA 2026 by James Kettle. A new class of HTTP request smuggling where servers reuse response-parsing code paths on incoming requests, causing misapplied rules and request boundary disagreements. Unlike classic CL.TE/TE.CL smuggling (differential parsing between front-end and back-end), this exploits shared code paths between request and response parsing WITHIN A SINGLE SERVER. CVE-2026-63078 in Apache Traffic Server was discovered via this research, reportedly affecting ~700 targets. The CVE could NOT be independently confirmed in NVD. The existing system covers CL.TE, TE.CL, H2C smuggling, and HTTP/2 desync but does NOT cover intra-server parser reuse as a smuggling vector.",
+      "severity": "high",
+      "confidence": "medium",
+      "cves": [
+        "CVE-2026-63078"
+      ],
+      "tools": [
+        "HTTP Terminator (PortSwigger, AGPL-3.0)",
+        "Burp Suite HTTP Request Smuggler extension"
+      ],
+      "reproduction_steps": "1. Install HTTP Terminator from github.com/PortSwigger/http-terminator. 2. Run 'seeker' stage (Python + Claude API) to extract parsing technique differentials from HTTP RFCs. 3. Run 'flamer' (Java/Gradle) to generate malformed test cases targeting shared-parser confusion. 4. Use 'validator' (Burp Suite extension) against target infrastructure to detect request boundary disagreements caused by response-parsing logic applied to requests. 5. Use 'investigator' (Claude Code) to confirm exploitability. Note: Exact payload format for shared-parser confusion was NOT found in publicly accessible sources. The tool is confirmed open-source.",
+      "sources": [
+        "https://github.com/PortSwigger/http-terminator",
+        "https://firecompass.com/field-notes-from-black-hat-and-def-con-2026-what-changed-in-the-attacker-playbook/"
+      ],
+      "defense_bypass": "Traditional WAF rules checking Content-Length/Transfer-Encoding mismatches miss shared-parser confusion since the exploit triggers response-handling code paths during request parsing. The malformed requests may not match any known smuggling signature.",
+      "chaining_potential": "Shared-parser confusion smuggling -> cache poisoning (store attacker-controlled responses for legitimate URLs) -> credential theft via request routing to attacker destinations -> authentication bypass via smuggled requests inheriting another user's session."
+    },
+    {
+      "title": "GraphQL Directive-Level Authorization Override (@authentication Silently Dropped)",
+      "category": "Broken Access Control",
+      "description": "CVE-2026-19869 (CVSS v4.0 7.6) in @neo4j/graphql demonstrates a genuinely novel authorization bypass pattern: field-level @authentication directives on root custom-resolver fields are SILENTLY DISCARDED when a type-level @authentication directive exists on the same root operation type. The library evaluates ONLY the type-level rule for root types, so stricter field-level rules (e.g., jwt.roles_INCLUDES: admin) are never checked. Critically, a schema WITHOUT the broad type-level rule correctly enforces the admin check -- meaning the DEFENSIVE pattern of adding type-level auth CREATES the vulnerability. The existing system covers GraphQL batching, injection, and introspection but does NOT cover directive-level authorization logic flaws where security annotations conflict and the stricter one is silently dropped.",
+      "severity": "high",
+      "confidence": "high",
+      "cves": [
+        "CVE-2026-19869"
+      ],
+      "tools": [
+        "GraphQL client (Altair, Insomnia)",
+        "Burp Suite with InQL extension",
+        "graphql-cop"
+      ],
+      "reproduction_steps": "1. Confirm target uses @neo4j/graphql >= 5.2.0 with features.authorization enabled. 2. Identify a root operation type (Query/Mutation) with BOTH type-level @authentication AND a field with stricter field-level @authentication (e.g., type Query @authentication { sensitiveField: String @authentication(jwt: { roles_INCLUDES: \"admin\" }) }). 3. Obtain a JWT satisfying only the type-level requirement (e.g., roles:[\"user\"] not \"admin\"). 4. Send: query { sensitiveField }. 5. Observe success -- field-level admin check silently skipped. 6. Related: CVE-2026-5423 in the same library allows subscription auth bypass via unverified connectionParams.jwt (forged JWT claims in WebSocket connectionParams without signing key).",
+      "sources": [
+        "https://github.com/neo4j/graphql/security/advisories/GHSA-82m8-p9px-c3x5",
+        "https://github.com/neo4j/graphql/security/advisories/GHSA-fcpg-3fw5-vc65"
+      ],
+      "defense_bypass": "GraphQL security scanners (InQL, graphql-cop) test for introspection exposure and injection but do NOT test directive-level authorization logic. The bypass requires understanding the schema's directive hierarchy, not just query structure.",
+      "chaining_potential": "Type-level auth satisfied with basic credentials -> field-level admin check silently dropped -> admin mutation execution -> privilege escalation. Combined with CVE-2026-5423 (subscription auth bypass via forged WebSocket connectionParams.jwt), an UNAUTHENTICATED attacker can forge claims and access restricted data."
+    },
+    {
+      "title": "WebSocket Upgrade Request as SSRF Vector Bypassing HTTP Safety Checks",
+      "category": "Server-Side Request Forgery",
+      "description": "CVE-2026-44578 (CVSS 8.6 Scope Changed) in self-hosted Next.js (>= 13.4.13 and < 15.5.16, >= 16.0.0 and < 16.2.5) demonstrates that WebSocket upgrade requests were not subjected to the same safety checks applied to normal HTTP requests. A crafted upgrade request makes the Node.js server proxy connections to arbitrary internal destinations including cloud metadata (169.254.169.254). The existing system covers WebSocket attacks (CSWSH, state confusion, Socket.IO) and SSRF, but NOT the use of protocol upgrade mechanisms to bypass HTTP-layer SSRF protections. This is distinct from both classic WebSocket attacks and classic SSRF -- it exploits the gap between HTTP safety enforcement and WebSocket upgrade handling.",
+      "severity": "high",
+      "confidence": "high",
+      "cves": [
+        "CVE-2026-44578"
+      ],
+      "tools": [
+        "curl with WebSocket upgrade headers",
+        "wscat",
+        "Burp Suite"
+      ],
+      "reproduction_steps": "1. Identify self-hosted Next.js (not Vercel-hosted) running versions 13.4.13-15.5.15 or 16.0.0-16.2.4 using built-in Node.js server. 2. Send crafted HTTP request with WebSocket upgrade headers targeting internal destination: curl -i -N -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Host: target-nextjs.com' 'http://target-nextjs.com/_next/webpack-hmr?destination=http://169.254.169.254/latest/meta-data/'. 3. Node.js server processes upgrade without safety checks applied to normal HTTP. 4. Server proxies connection to attacker-specified internal destination. 5. Cloud metadata or internal service responses returned through WebSocket connection.",
+      "sources": [
+        "https://github.com/vercel/next.js/security/advisories/GHSA-c4j6-fc7j-m34r"
+      ],
+      "defense_bypass": "WebSocket upgrade requests may not be inspected by HTTP-layer WAFs that only examine standard request/response traffic. The Connection:Upgrade and Upgrade:websocket headers cause some security tools to skip inspection entirely, treating the request as a protocol negotiation rather than an HTTP request.",
+      "chaining_potential": "WebSocket upgrade SSRF -> cloud metadata access -> IAM credential theft -> lateral movement to S3/RDS/other cloud services. Also: WebSocket SSRF -> internal service discovery -> exploitation of unprotected internal APIs."
+    },
+    {
+      "title": "AI Multimodal Input Endpoint SSRF via HTTP Redirect Following",
+      "category": "Server-Side Request Forgery",
+      "description": "CVE-2026-63764 (CVSS v4.0 9.2) in LMDeploy's OpenAI-compatible API demonstrates a new SSRF attack surface specific to AI/ML multimodal endpoints. The _load_http_url function validates the original image_url against private IP ranges but does NOT re-validate hosts reached after HTTP redirects. An attacker sends a chat completions request with image_url pointing to a server that returns 302 redirect to 169.254.169.254. The existing system covers SSRF and AI/LLM attacks separately, but does NOT cover multimodal input fields (image_url, audio_url, file_url in OpenAI-compatible APIs) as SSRF vectors. This is an emerging attack surface as more applications deploy OpenAI-compatible multimodal endpoints.",
+      "severity": "high",
+      "confidence": "high",
+      "cves": [
+        "CVE-2026-63764"
+      ],
+      "tools": [
+        "curl",
+        "Python HTTP server (for 302 redirect)",
+        "Burp Suite"
+      ],
+      "reproduction_steps": "1. Set up public server returning: HTTP/1.1 302 Found, Location: http://169.254.169.254/latest/meta-data/iam/security-credentials/. 2. Target LMDeploy instance running OpenAI-compatible API (version <= 0.14.0). 3. Send POST /v1/chat/completions with body containing image_url pointing to redirect server: {\"type\": \"image_url\", \"image_url\": {\"url\": \"https://your-redirect-server.com/img\"}}. 4. _load_http_url validates public domain (passes), follows 302 to 169.254.169.254 (no re-validation). 5. Cloud metadata fetched, may be reflected in error messages or server logs. 6. Fix (PR #4734): disables automatic redirects, implements explicit redirect loop with re-validation of each hop.",
+      "sources": [
+        "https://github.com/advisories/ghsa-rqhf-rg9p-w5gg",
+        "https://github.com/InternLM/lmdeploy/pull/4734"
+      ],
+      "defense_bypass": "URL-pattern-based WAF rules pass the initial request because it points to a legitimate public domain. The redirect happens server-side, invisible to front-end inspection. Standard API security scanners do not test redirect-following behavior in multimodal AI endpoints.",
+      "chaining_potential": "Multimodal image_url -> redirect SSRF -> cloud metadata -> IAM credential theft -> lateral cloud movement to S3/RDS. Also: multimodal SSRF -> internal service discovery -> mapping internal network topology via response timing and error differences."
+    },
+    {
+      "title": "ASP.NET Core Kestrel Scope-Changing HTTP Request Smuggling",
+      "category": "Request Smuggling",
+      "description": "CVE-2025-55315 is a scope-changing (CVSS S:C) HTTP request smuggling vulnerability in ASP.NET Core's Kestrel web server affecting .NET 8.0.x < 8.0.21 and .NET 9.0.x < 9.0.10. The scope-changing vector (AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:L) indicates exploitation crosses trust boundaries. While request smuggling is covered by the existing system, this specific instance is notable for three reasons that warrant explicit testing: (1) Kestrel is the DEFAULT web server for ALL ASP.NET Core applications, making the blast radius enormous; (2) the scope-changing CVSS confirms cross-boundary impact in multi-tenant deployments; (3) it affects the most recent .NET versions (8 and 9). The existing system covers H2C and TE.CL smuggling generically but does not have Kestrel-specific parsing differential detection.",
+      "severity": "critical",
+      "confidence": "medium",
+      "cves": [
+        "CVE-2025-55315"
+      ],
+      "tools": [
+        "Burp Suite HTTP Request Smuggler extension",
+        "smuggler.py",
+        "Custom HTTP/1.1 raw socket clients"
+      ],
+      "reproduction_steps": "1. Identify target running ASP.NET Core with Kestrel behind a reverse proxy (look for Server: Kestrel or X-Powered-By: ASP.NET response headers). 2. Determine .NET version (vulnerable if 8.0.x < 8.0.21 or 9.0.x < 9.0.10). 3. Craft CL.TE variant: send request with both Content-Length and Transfer-Encoding: chunked where Content-Length covers visible body and chunked encoding hides a smuggled request. 4. Craft TE.CL variant: reverse parsing order. 5. Verify by detecting response desync or smuggled request processing. 6. Update to .NET 8.0.21+ or 9.0.10+.",
+      "sources": [
+        "https://andrewlock.net/understanding-the-worst-dotnet-vulnerability-request-smuggling-and-cve-2025-55315/"
+      ],
+      "defense_bypass": "Standard WAFs inspect HTTP as interpreted by the front-end proxy, so smuggled portion is invisible. Network IDS sees valid HTTP traffic. The attack requires only a raw HTTP client.",
+      "chaining_potential": "Smuggled request -> inherit another user's authentication cookies -> session hijacking. Or: smuggled request -> cache poisoning -> stored XSS at scale. In multi-tenant Kestrel deployments, smuggling can cross tenant boundaries due to scope-changing nature."
+    }
+  ],
+  "new_chaining_patterns": [
+    {
+      "chain_name": "JWE Envelope Cloak -> Identity Forgery -> Cross-Service Compromise",
+      "steps": [
+        "Obtain target RSA public key from JWKS endpoint (unauthenticated)",
+        "Construct unsigned PlainJWT (alg:none) with admin claims inside JWE wrapper encrypted with server's public key",
+        "Server decrypts JWE legitimately, inner PlainJWT causes toSignedJWT() to return null, signature verification skipped entirely",
+        "Forged admin identity grants access to all resources (BOLA)",
+        "If pac4j is used for SSO, forged identity propagates across all federated services"
+      ],
+      "impact": "Complete authentication bypass invisible to all network-layer inspection. Single bypass compromises entire SSO federation. The JWE encryption gives the attack a false veneer of cryptographic legitimacy that defeats WAFs, API gateways, and monitoring tools that inspect JWT structure.",
+      "example": "Target uses pac4j-jwt < 6.3.3 for SSO across 5 microservices. Attacker obtains public key from /.well-known/jwks.json, constructs JWE(PlainJWT(sub:admin, roles:[ADMIN])), gains admin access to all 5 services with a single forged token."
+    },
+    {
+      "chain_name": "Incomplete Patch -> Encoding Evasion -> Algorithm Confusion -> Full Auth Bypass",
+      "steps": [
+        "Identify application using fast-jwt with patched v6.2.0-6.2.2 (appears secure)",
+        "Prepend non-ECMAScript whitespace (U+200B zero-width space, U+FEFF BOM) to RSA public key string",
+        "Modified key bypasses both the original ^ regex anchor AND the trim() fix",
+        "PEM detection fails, key material falls through to HMAC verification path",
+        "Sign JWT with HS256 using the modified public key bytes as HMAC secret",
+        "Server validates HMAC signature using same modified key, authentication succeeds"
+      ],
+      "impact": "Demonstrates that patch verification must include encoding-level evasion testing. Organizations that updated to the 'fixed' version remain fully vulnerable. The Unicode prefix is invisible in most logging and monitoring tools.",
+      "example": "Node.js API updated fast-jwt to v6.2.2 after CVE-2026-34950 advisory. Security team verified the fix by testing whitespace prepending (blocked by trim()). Attacker uses U+200B prefix instead, bypasses trim(), achieves full algorithm confusion and forges admin JWT."
+    },
+    {
+      "chain_name": "Exception Swallowing -> Fail-Open Auth -> Admin API Access -> Infrastructure Compromise",
+      "steps": [
+        "Craft JWT with unsupported/bogus algorithm header (not alg:none, not known algorithms)",
+        "WSO2 OAuthAuthenticationInterceptor throws APIManagementException for unsupported algorithm",
+        "catch block silently swallows exception, request proceeds as authenticated with forged claims",
+        "Forged admin JWT grants access to WSO2 admin APIs (tenant management, service configuration)",
+        "Admin API access enables configuration poisoning of downstream services (supply chain)",
+        "Internal service connectivity exposed via admin APIs enables SSRF to cloud metadata"
+      ],
+      "impact": "The fail-open pattern is particularly dangerous because it bypasses ALL signature verification -- unlike algorithm confusion which requires the public key, this attack needs nothing. Any garbage signature with an unsupported algorithm header succeeds. CISA KEV confirms active exploitation.",
+      "example": "Attacker sends JWT with alg:'FAKE256' and random signature bytes to WSO2 API Manager 4.5.0. Exception in verification is swallowed. Attacker gains admin access, modifies API configurations to inject malicious response transformations affecting all API consumers."
+    },
+    {
+      "chain_name": "Multimodal Input SSRF -> Cloud Credential Theft -> Lateral Cloud Movement",
+      "steps": [
+        "Identify OpenAI-compatible multimodal API endpoint (LMDeploy, vLLM, or similar)",
+        "Set up redirect server returning 302 to cloud metadata endpoint (169.254.169.254)",
+        "Send chat completions request with image_url pointing to redirect server",
+        "Server validates original URL (public IP, passes), follows redirect to metadata (no re-validation)",
+        "Cloud IAM temporary credentials (AccessKeyId, SecretAccessKey, Token) exfiltrated",
+        "Use stolen credentials for lateral movement: S3 data exfiltration, RDS access, further SSRF from cloud services"
+      ],
+      "impact": "AI/ML multimodal endpoints create a new SSRF attack surface because they must fetch external resources (images, audio, video) as part of normal operation. The redirect bypass defeats the most common SSRF defense (validate-then-request). This chain is specific to the emerging category of AI inference servers and not covered by traditional API security testing.",
+      "example": "LMDeploy instance on AWS EC2 serves /v1/chat/completions with vision support. Attacker sends image_url to redirect server. Server follows redirect to 169.254.169.254, fetches IAM role credentials. Attacker uses credentials to access S3 buckets containing training data and model weights."
+    },
+    {
+      "chain_name": "GraphQL Directive Collision -> Silent Privilege Escalation -> Subscription Data Exfiltration",
+      "steps": [
+        "Identify Neo4j GraphQL API with type-level @authentication on root Query/Mutation types",
+        "Obtain basic-level JWT (any authenticated user, no admin role required)",
+        "Query admin-restricted fields -- field-level @authentication silently dropped due to type-level directive precedence",
+        "Access admin mutations to modify data, create new admin accounts, or exfiltrate sensitive records",
+        "Separately exploit CVE-2026-5423: connect via WebSocket with forged JWT claims in connectionParams",
+        "Subscribe to real-time data streams without any signature verification on the subscription JWT"
+      ],
+      "impact": "Two vulnerabilities in the same library (@neo4j/graphql) combine for escalation from unauthenticated to admin. The directive collision is particularly insidious because adding more security annotations (type-level @authentication) actually WEAKENS security by overriding stricter field-level rules. Security auditors reviewing the schema see defense-in-depth but the code implements defense-undermining.",
+      "example": "E-commerce GraphQL API on Neo4j: type Query @authentication { products: [Product], adminDashboard: AdminData @authentication(jwt: {roles_INCLUDES: 'admin'}) }. Any authenticated user queries adminDashboard and gets admin data because the type-level @authentication shadows the field-level admin check."
+    }
+  ],
+  "new_tools": [
+    {
+      "name": "HTTP Terminator",
+      "purpose": "AI-assisted four-stage HTTP request smuggling discovery pipeline. Seeker extracts parsing techniques from RFCs using Claude, Flamer generates malformed test cases, Validator runs them via Burp Suite, Investigator confirms findings using Claude Code. Specifically targets shared-parser confusion class (response-parsing logic reused on incoming requests). Open-source, AGPL-3.0.",
+      "url": "https://github.com/PortSwigger/http-terminator"
+    },
+    {
+      "name": "SSRFProtectedHTTPAdapter (MLflow pattern)",
+      "purpose": "Defense-side reference implementation from MLflow PR #24258 fix for CVE-2026-64849. Custom urllib3 connection class calls getpeername() on raw TCP socket immediately after connect and before TLS handshake, validating peer IP via ipaddress.is_global (blocks CGNAT 100.64.0.0/10). Defeats DNS rebinding because validation happens at socket level, not DNS level. Sets session.trust_env=False to prevent proxy env vars from making the proxy the validated peer. This is the most robust SSRF-at-connect-time defense pattern documented in 2026.",
+      "url": "https://github.com/mlflow/mlflow/pull/24258"
+    },
+    {
+      "name": "rebind.it / Singularity of Origin",
+      "purpose": "DNS rebinding attack tools for testing TOCTOU vulnerabilities in URL validation. Configure domains to alternate between public IPs (passing validation) and internal IPs (169.254.169.254) with short TTLs. Required for testing the validate-then-request pattern that MLflow CVE-2026-64849 and similar SSRF vulnerabilities exploit.",
+      "url": "https://github.com/nccgroup/singularity"
+    }
+  ],
+  "gaps_identified": [
+    "Fail-open exception handling patterns in JWT/authentication validators: The existing system tests for algorithm confusion, key injection, and alg:none but does NOT test what happens when the validator encounters an UNSUPPORTED or UNKNOWN algorithm. Sending JWTs with bogus algorithm headers (not none, not HS256, not any recognized algorithm) to trigger exception-handling code paths is a missing test category.",
+    "Nested token format attacks (JWE wrapping unsigned JWTs): No test exists for wrapping an unsigned PlainJWT inside a legitimately encrypted JWE envelope. This is distinct from alg:none testing because the outer encryption layer defeats all network-level detection of the unsigned inner token. Testing requires JWE construction capability with the server's public key.",
+    "Encoding-level evasion of key format detection: The existing system tests algorithm confusion but does NOT test whether key format detection (PEM vs raw bytes) can be defeated by Unicode prefixes, zero-width characters, BOM markers, or control characters prepended to key material. This is particularly relevant for Node.js/JavaScript JWT libraries where String.prototype.trim() has limited character coverage.",
+    "GraphQL directive-level authorization logic: The existing system covers GraphQL batching, injection, and introspection but has NO test for directive precedence conflicts. Specifically: whether type-level authorization directives shadow or override stricter field-level directives on root operation types. This requires schema-aware testing, not just query fuzzing.",
+    "WebSocket upgrade requests as SSRF vectors: The existing system covers WebSocket attacks (CSWSH, state confusion) and SSRF separately, but does NOT test whether HTTP safety checks (private IP blocking, URL validation) are applied to WebSocket upgrade requests. The protocol upgrade mechanism may bypass HTTP-layer protections.",
+    "AI multimodal input fields as SSRF entry points: OpenAI-compatible API endpoints accepting image_url, audio_url, or file_url in chat completion requests create SSRF attack surface not covered by traditional API testing. Specifically, redirect-following behavior after initial URL validation is not tested. This is an expanding attack surface as more applications deploy multimodal AI inference endpoints.",
+    "Shared-parser confusion (intra-server response-parser reuse on requests): The existing HTTP smuggling coverage tests CL.TE, TE.CL, H2C, and HTTP/2 desync between DIFFERENT servers. It does not test for shared code paths between request and response parsing WITHIN a single server, which is the new class identified by PortSwigger's HTTP Terminator research.",
+    "Incomplete patch verification with encoding evasion: No systematic approach exists for testing whether security patches can be bypassed through encoding-level manipulations (Unicode normalization, zero-width characters, BOM injection) applied to the exact data that the patch added validation for. This is a meta-gap in the testing methodology.",
+    "Subscription authentication in GraphQL via WebSocket connectionParams: CVE-2026-5423 shows that WebSocket connectionParams.jwt can carry forged claims without signature verification, bypassing both @authentication and @subscriptionsAuthorization directives. This is a distinct attack vector from CSWSH and is specific to GraphQL subscription implementations.",
+    "Socket-level SSRF validation (defense gap): The validate-then-request pattern remains the dominant SSRF defense but is fundamentally broken against DNS rebinding. The MLflow SSRFProtectedHTTPAdapter pattern (getpeername() at socket level after connect, before TLS) is the only robust defense documented in 2026. Testing frameworks should verify whether applications implement socket-level validation rather than URL-level validation."
+  ]
+}
