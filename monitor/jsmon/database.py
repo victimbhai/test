@@ -497,7 +497,10 @@ class PostgrestStore(Store):
                 params={
                     "asset_id": f"eq.{asset_id}",
                     "select": "*",
-                    "order": "captured_at.desc",
+                    # id is the tiebreak: two versions captured inside the
+                    # same second must still have a deterministic order,
+                    # otherwise "previous" and "current" can swap.
+                    "order": "captured_at.desc,id.desc",
                     "limit": limit,
                 },
             )
@@ -525,7 +528,7 @@ class PostgrestStore(Store):
                 params={
                     "asset_id": f"eq.{asset_id}",
                     "select": "id,storage_object_path,captured_at",
-                    "order": "captured_at.desc",
+                    "order": "captured_at.desc,id.desc",
                 },
             )
         )

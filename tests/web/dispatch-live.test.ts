@@ -20,25 +20,89 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Fakes
 // ---------------------------------------------------------------------------
-const github = { runs: [], dispatches: [], failNext: 0, failStatus: 0, failMessage: "" };
-const db = { dispatch_jobs: [], assets: [] };
+interface FakeRun {
+  id: number;
+  name: string;
+  status: string | null;
+  conclusion: string | null;
+  event: string;
+  created_at: string;
+  run_started_at: string;
+  updated_at: string;
+  run_attempt: number;
+  html_url: string;
+}
+
+interface FakeDispatch {
+  ref: string;
+  inputs: Record<string, string>;
+}
+
+interface FakeAsset {
+  id: string;
+  [key: string]: unknown;
+}
+
+interface FakeJob {
+  id: string;
+  owner_id: string;
+  project_id: string | null;
+  asset_id: string | null;
+  payload: Record<string, unknown>;
+  status: string;
+  attempts: number;
+  max_attempts: number;
+  last_error: string | null;
+  next_retry_at: string | null;
+  github_run_id: string | null;
+  dispatched_at: string | null;
+  reason: string;
+  created_at: string;
+}
+
+const github = {
+  runs: [] as FakeRun[],
+  dispatches: [] as FakeDispatch[],
+  failNext: 0,
+  failStatus: 0,
+  failMessage: "",
+};
+const db = { dispatch_jobs: [] as FakeJob[], assets: [] as FakeAsset[] };
+
+/** Look up a workflow run or fail loudly. */
+function requireRun(id: unknown): FakeRun {
+  const run = github.runs.find((r) => String(r.id) === String(id));
+  if (!run) throw new Error(`run ${String(id)} not found in the fake GitHub API`);
+  return run;
+}
+
+/** Look up a job or fail loudly — avoids `possibly undefined` noise. */
+function requireJob(id: unknown): FakeJob {
+  const job = db.dispatch_jobs.find((j) => j.id === id);
+  if (!job) throw new Error(`job ${String(id)} not found in the fake outbox`);
+  return job;
+}
 
 const githubServer = createServer((req, res) => {
+  const url = req.url ?? "/";
   let body = "";
   req.on("data", (chunk) => (body += chunk));
   req.on("end", () => {
-    const send = (code, payload) => {
+    const send = (code: number, payload?: unknown): void => {
       const text = payload === undefined ? "" : JSON.stringify(payload);
       res.writeHead(code, { "content-type": "application/json" });
       res.end(text);
     };
 
-    if (req.method === "POST" && req.url.includes("/dispatches")) {
+    const url = req.url ?? "/";
+    if (req.method === "POST" && url.includes("/dispatches")) {
       if (github.failNext > 0) {
         github.failNext -= 1;
         send(github.failStatus || 500, { message: github.failMessage || "Server Error" });
@@ -53,18 +117,18 @@ const githubServer = createServer((req, res) => {
         run_started_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         run_attempt: 1,
-        html_url: `http://127.0.0.1:${githubServer.address().port}/runs/${id}`,
+        html_url: `http://127.0.0.1:${(githubServer.address() as AddressInfo).port}/runs/${id}`,
       });
       send(204);
       return;
     }
 
-    if (req.method === "GET" && req.url.includes("/actions/workflows/") && req.url.includes("/runs")) {
+    if (req.method === "GET" && url.includes("/actions/workflows/") && url.includes("/runs")) {
       send(200, { workflow_runs: github.runs });
       return;
     }
 
-    const runMatch = /\/actions\/runs\/(\d+)/.exec(req.url);
+    const runMatch = /\/actions\/runs\/(\d+)/.exec(url);
     if (req.method === "GET" && runMatch) {
       const run = github.runs.find((r) => String(r.id) === runMatch[1]);
       if (!run) { send(404, { message: "Not Found" }); return; }
@@ -72,22 +136,36 @@ const githubServer = createServer((req, res) => {
       return;
     }
 
-    send(404, { message: `unexpected ${req.method} ${req.url}` });
+    send(404, { message: `unexpected ${req.method} ${url}` });
   });
 });
 
 const supabaseServer = createServer((req, res) => {
+  const path = req.url ?? "/";
   let body = "";
   req.on("data", (chunk) => (body += chunk));
   req.on("end", () => {
-    const send = (code, payload) => {
+    const send = (code: number, payload?: unknown) => {
       const text = payload === undefined || payload === null ? "" : JSON.stringify(payload);
       res.writeHead(code, { "content-type": "application/json" });
       res.end(text);
     };
-    const json = () => { try { return JSON.parse(body || "{}"); } catch { return {}; } };
+    interface RpcBody {
+      p_owner?: string;
+      p_project_id?: string | null;
+      p_asset_id?: string | null;
+      p_reason?: string;
+      p_payload?: Record<string, unknown>;
+      p_job?: string;
+      p_error?: string;
+      p_backoff_seconds?: number;
+      p_github_run_id?: string | null;
+    }
+    const json = (): RpcBody => {
+      try { return JSON.parse(body || "{}") as RpcBody; } catch { return {}; }
+    };
 
-    if (req.url.startsWith("/rest/v1/rpc/enqueue_scan")) {
+    if (path.startsWith("/rest/v1/rpc/enqueue_scan")) {
       const b = json();
       if (b.p_asset_id) {
         const live = db.dispatch_jobs.find(
@@ -98,7 +176,7 @@ const supabaseServer = createServer((req, res) => {
       }
       const id = randomUUID();
       db.dispatch_jobs.push({
-        id, owner_id: b.p_owner, project_id: b.p_project_id ?? null,
+        id, owner_id: b.p_owner ?? "", project_id: b.p_project_id ?? null,
         asset_id: b.p_asset_id ?? null, payload: b.p_payload ?? {},
         status: "pending", attempts: 0, max_attempts: 5,
         last_error: null, next_retry_at: null, github_run_id: null,
@@ -109,19 +187,19 @@ const supabaseServer = createServer((req, res) => {
       return;
     }
 
-    if (req.url.startsWith("/rest/v1/rpc/claim_dispatch_job")) {
+    if (path.startsWith("/rest/v1/rpc/claim_dispatch_job")) {
       const due = db.dispatch_jobs.filter((j) => j.status === "pending");
       for (const job of due) { job.status = "dispatching"; job.attempts += 1; }
       send(200, due);
       return;
     }
 
-    if (req.url.startsWith("/rest/v1/rpc/mark_dispatch_queued")) {
+    if (path.startsWith("/rest/v1/rpc/mark_dispatch_queued")) {
       const b = json();
       const job = db.dispatch_jobs.find((j) => j.id === b.p_job);
       if (job) {
         job.status = "queued";
-        job.github_run_id = b.p_github_run_id;
+        job.github_run_id = b.p_github_run_id ?? null;
         job.dispatched_at = new Date().toISOString();
         job.last_error = null;
       }
@@ -129,11 +207,11 @@ const supabaseServer = createServer((req, res) => {
       return;
     }
 
-    if (req.url.startsWith("/rest/v1/rpc/mark_dispatch_failed")) {
+    if (path.startsWith("/rest/v1/rpc/mark_dispatch_failed")) {
       const b = json();
       const job = db.dispatch_jobs.find((j) => j.id === b.p_job);
       if (job) {
-        job.last_error = b.p_error;
+        job.last_error = b.p_error ?? null;
         if (job.attempts >= job.max_attempts) {
           job.status = "failed";
         } else {
@@ -147,7 +225,7 @@ const supabaseServer = createServer((req, res) => {
       return;
     }
 
-    if (req.url.startsWith("/rest/v1/rpc/retry_dispatch_job")) {
+    if (path.startsWith("/rest/v1/rpc/retry_dispatch_job")) {
       const b = json();
       const job = db.dispatch_jobs.find((j) => j.id === b.p_job);
       if (job && ["failed", "cancelled"].includes(job.status)) {
@@ -160,7 +238,7 @@ const supabaseServer = createServer((req, res) => {
       return;
     }
 
-    if (req.method === "POST" && req.url.includes("/rest/v1/assets")) {
+    if (req.method === "POST" && path.includes("/rest/v1/assets")) {
       const rows = json();
       const list = Array.isArray(rows) ? rows : [rows];
       const inserted = list.map((row) => ({ ...row, id: row.id ?? randomUUID() }));
@@ -169,11 +247,11 @@ const supabaseServer = createServer((req, res) => {
       return;
     }
 
-    if (req.method === "GET" && req.url.includes("/rest/v1/dispatch_jobs")) {
+    if (req.method === "GET" && path.includes("/rest/v1/dispatch_jobs")) {
       // Supabase-js sends filters as query params (status=in.(...), id=eq.<uuid>).
-      const url = new URL(req.url, "http://x");
-      const statusIn = url.searchParams.get("status");
-      const idEq = url.searchParams.get("id");
+      const q = new URL(path, "http://x");
+      const statusIn = q.searchParams.get("status");
+      const idEq = q.searchParams.get("id");
       let rows = db.dispatch_jobs;
       if (statusIn) {
         const allowed = statusIn.replace(/^in\.\(|\)$/g, "").split(",");
@@ -184,10 +262,10 @@ const supabaseServer = createServer((req, res) => {
       return;
     }
 
-    if (req.method === "PATCH" && req.url.includes("/rest/v1/dispatch_jobs")) {
+    if (req.method === "PATCH" && path.includes("/rest/v1/dispatch_jobs")) {
       const b = json();
-      const url = new URL(req.url, "http://x");
-      const id = (url.searchParams.get("id") ?? "").replace(/^eq\./, "");
+      const q = new URL(path, "http://x");
+      const id = (q.searchParams.get("id") ?? "").replace(/^eq\./, "");
       const job = db.dispatch_jobs.find((j) => j.id === id);
       if (job) Object.assign(job, b);
       send(200, job ? [job] : []);
@@ -202,24 +280,39 @@ const supabaseServer = createServer((req, res) => {
 
 let GH = "";
 let SB = "";
-let supabase;
-let realFetch;
+let supabase: SupabaseClient;
+let realFetch: typeof fetch;
 
 beforeAll(async () => {
-  await new Promise((resolve) => githubServer.listen(0, "127.0.0.1", resolve));
-  await new Promise((resolve) => supabaseServer.listen(0, "127.0.0.1", resolve));
-  GH = `http://127.0.0.1:${githubServer.address().port}`;
-  SB = `http://127.0.0.1:${supabaseServer.address().port}`;
+  await new Promise<void>((resolve) => githubServer.listen(0, "127.0.0.1", () => resolve()));
+  await new Promise<void>((resolve) => supabaseServer.listen(0, "127.0.0.1", () => resolve()));
+  GH = `http://127.0.0.1:${(githubServer.address() as AddressInfo).port}`;
+  SB = `http://127.0.0.1:${(supabaseServer.address() as AddressInfo).port}`;
 
   process.env.NEXT_PUBLIC_SUPABASE_URL = SB;
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "test-publishable-key";
   process.env.SUPABASE_SECRET_KEY = "test-service-key";
   process.env.GITHUB_OWNER = "test-owner";
   process.env.GITHUB_REPO = "test-repo";
   process.env.GITHUB_WORKFLOW_ID = "jsmon-monitor.yml";
   process.env.GITHUB_ACCESS_TOKEN = "test-token";
 
+  // The config module memoises environment lookups at first call, which can
+  // happen during import (before this hook ran). Invalidate it so the fakes
+  // above are actually used by lib/supabase/server and lib/github/client.
+  const { __resetConfigCacheForTests } = await import("@/lib/config");
+  __resetConfigCacheForTests();
+
   const { createServiceClient } = await import("@/lib/supabase/server");
-  supabase = createServiceClient();
+  supabase = createServiceClient()!;
+
+  if (!supabase) {
+    throw new Error(
+      "createServiceClient() returned null: the config cache was not reset. " +
+        "Set NEXT_PUBLIC_SUPABASE_URL/PUBLISHABLE_KEY and call " +
+        "__resetConfigCacheForTests() before constructing clients.",
+    );
+  }
 
   realFetch = globalThis.fetch;
   globalThis.fetch = (input, init) => {
@@ -295,7 +388,7 @@ describe("automatic scan trigger on target creation", () => {
     await drainDispatchQueue(5);
 
     const runId = db.dispatch_jobs[0].github_run_id;
-    const run = github.runs.find((r) => String(r.id) === runId);
+    const run = requireRun(runId);
 
     run.status = "in_progress";
     await reconcileDispatchJobs(5);
@@ -311,7 +404,7 @@ describe("automatic scan trigger on target creation", () => {
     await supabase.rpc("enqueue_scan", { p_owner: "u", p_project_id: "p", p_asset_id: "a" });
     await drainDispatchQueue(5);
 
-    const run = github.runs[0];
+    const run = github.runs[0]!;
     run.status = "completed";
     run.conclusion = "failure";
     await reconcileDispatchJobs(5);
@@ -337,7 +430,7 @@ describe("automatic scan trigger on target creation", () => {
       p_owner: "u", p_project_id: "p", p_asset_id: null,
       p_reason: "bulk_import", p_payload: { notify: true, full_scan: true },
     });
-    const job = db.dispatch_jobs.find((j) => j.id === data);
+    const job = requireJob(data);
 
     expect(job).toBeTruthy();
     expect(job.asset_id).toBeNull();
@@ -349,7 +442,7 @@ describe("automatic scan trigger on target creation", () => {
     const { data: jobId } = await supabase.rpc("enqueue_scan", {
       p_owner: "u", p_project_id: "p", p_asset_id: "a",
     });
-    const job = db.dispatch_jobs.find((j) => j.id === jobId);
+    const job = requireJob(jobId);
 
     github.failNext = 1;
     github.failStatus = 403;
@@ -367,7 +460,7 @@ describe("automatic scan trigger on target creation", () => {
     const { data: jobId } = await supabase.rpc("enqueue_scan", {
       p_owner: "u", p_project_id: "p", p_asset_id: "a",
     });
-    const job = db.dispatch_jobs.find((j) => j.id === jobId);
+    const job = requireJob(jobId);
 
     github.failNext = 99;
     github.failStatus = 500;
@@ -397,7 +490,7 @@ describe("automatic scan trigger on target creation", () => {
 
     expect(github.dispatches.length).toBe(before + 1);
     // Only workflow dispatches, never repository content writes.
-    for (const dispatch of github.dispatches) {
+    for (const dispatch of github.dispatches as Array<{ ref?: string; inputs?: unknown }>) {
       expect(dispatch.ref).toBeDefined();
       expect(dispatch.inputs).toBeDefined();
     }

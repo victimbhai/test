@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Bell, Loader2, Send, ShieldCheck } from "lucide-react";
 
 import { useProjects } from "@/lib/hooks/useMonitoring";
@@ -37,12 +38,12 @@ export default function NotificationsPage() {
   const { data: projectsData } = useProjects();
   const projects = projectsData?.projects ?? [];
 
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [settings, setSettings] = useState<ChannelSetting[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [chosenProject, setChosenProject] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
 
+  // Draft form state. Credentials are intentionally never pre-filled: the API
+  // returns presence flags only, so an empty field means "leave unchanged".
   const [telegram, setTelegram] = useState({
     enabled: false,
     bot_token: "",
@@ -56,44 +57,41 @@ export default function NotificationsPage() {
     min_severity: "low",
   });
 
-  useEffect(() => {
-    if (projects.length > 0 && projectId === null) {
-      setProjectId(projects[0].id);
-    }
-  }, [projects, projectId]);
 
-  useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
-    setLoading(true);
-    fetch(`/api/notifications?project_id=${projectId}`)
-      .then((response) => response.json())
-      .then((payload) => {
-        if (cancelled) return;
-        const rows = (payload.settings ?? []) as ChannelSetting[];
-        setSettings(rows);
+  // Default to the first project without an effect: derived state keeps this
+  // render-stable and avoids a cascading update.
+  const projectId = chosenProject ?? projects[0]?.id ?? null;
 
-        const tg = rows.find((row) => row.channel === "telegram");
-        const sl = rows.find((row) => row.channel === "slack");
+  // Notification settings come from the API as a query. Deriving the form
+  // state from query data (rather than setState inside an effect) keeps the
+  // render path stable and lets TanStack Query own caching and refetching.
+  const settingsQuery = useQuery({
+    queryKey: ["notification-settings", projectId],
+    queryFn: async () => {
+      const response = await fetch(`/api/notifications?project_id=${projectId}`);
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Could not load notification settings");
+      }
+      return (payload.settings ?? []) as ChannelSetting[];
+    },
+    enabled: !!projectId,
+  });
 
-        setTelegram({
-          enabled: tg?.enabled ?? false,
-          bot_token: "",
-          chat_id: "",
-          min_severity: tg?.min_severity ?? "low",
-        });
-        setSlack({
-          enabled: sl?.enabled ?? false,
-          bot_token: "",
-          chat_id: "",
-          min_severity: sl?.min_severity ?? "low",
-        });
-      })
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
+  const rows = settingsQuery.data ?? [];
+  const loading = settingsQuery.isLoading || settingsQuery.isFetching;
+
+  const telegramRow = rows.find((row) => row.channel === "telegram");
+  const slackRow = rows.find((row) => row.channel === "slack");
+  // Server-provided defaults for the two channels.
+  const telegramDefaults = {
+    enabled: telegramRow?.enabled ?? false,
+    min_severity: telegramRow?.min_severity ?? "low",
+  };
+  const slackDefaults = {
+    enabled: slackRow?.enabled ?? false,
+    min_severity: slackRow?.min_severity ?? "low",
+  };
 
   async function save(
     channel: "telegram" | "slack",
@@ -146,8 +144,8 @@ export default function NotificationsPage() {
     }
   }
 
-  const tgSetting = settings.find((row) => row.channel === "telegram");
-  const slSetting = settings.find((row) => row.channel === "slack");
+  const tgSetting = telegramRow;
+  const slSetting = slackRow;
 
   return (
     <div className="space-y-6">
@@ -166,7 +164,7 @@ export default function NotificationsPage() {
           <select
             id="notify-project"
             value={projectId ?? ""}
-            onChange={(event) => setProjectId(event.target.value || null)}
+            onChange={(event) => setChosenProject(event.target.value || null)}
             className="h-9 min-w-[220px] rounded-lg border border-[var(--border)] bg-[var(--surface-raised)] px-3 text-sm"
           >
             {projects.map((project) => (
@@ -188,7 +186,7 @@ export default function NotificationsPage() {
           <ChannelCard
             title="Telegram"
             description="Bot token plus chat ID. Changes arrive with hashes, sizes and a dashboard link."
-            enabled={telegram.enabled}
+            enabled={telegram.enabled || telegramDefaults.enabled}
             onEnabledChange={(value) =>
               setTelegram({ ...telegram, enabled: value })
             }
@@ -198,7 +196,7 @@ export default function NotificationsPage() {
             }
             chatId={telegram.chat_id}
             onChatIdChange={(value) => setTelegram({ ...telegram, chat_id: value })}
-            minSeverity={telegram.min_severity}
+            minSeverity={telegram.min_severity || telegramDefaults.min_severity}
             onMinSeverityChange={(value) =>
               setTelegram({ ...telegram, min_severity: value })
             }
@@ -214,13 +212,13 @@ export default function NotificationsPage() {
           <ChannelCard
             title="Slack"
             description="Bot token with chat:write. The bot must be invited to the channel."
-            enabled={slack.enabled}
+            enabled={slack.enabled || slackDefaults.enabled}
             onEnabledChange={(value) => setSlack({ ...slack, enabled: value })}
             botToken={slack.bot_token}
             onBotTokenChange={(value) => setSlack({ ...slack, bot_token: value })}
             chatId={slack.chat_id}
             onChatIdChange={(value) => setSlack({ ...slack, chat_id: value })}
-            minSeverity={slack.min_severity}
+            minSeverity={slack.min_severity || slackDefaults.min_severity}
             onMinSeverityChange={(value) => setSlack({ ...slack, min_severity: value })}
             hasToken={slSetting?.has_bot_token ?? false}
             hasChat={slSetting?.has_chat_id ?? false}

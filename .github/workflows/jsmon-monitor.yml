@@ -30,7 +30,11 @@ on:
         required: false
         type: string
       full_scan:
-        description: "Scan every eligible enabled target (default true)"
+        description: >-
+          Scan every eligible enabled target. true (default) with no
+          project_id/asset_id scans everything; when a scope is supplied it is
+          the declared operator intent and the scope still wins, because the
+          runner derives its target set from --project-id/--asset-id.
         required: false
         type: boolean
         default: true
@@ -140,9 +144,7 @@ jobs:
           if [ "${{ inputs.notify }}" = "false" ]; then
             ARGS="$ARGS --no-notify"
           fi
-          if [ "${{ inputs.dry_run }}" = "false" ]; then
-            :
-          elif [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi
 

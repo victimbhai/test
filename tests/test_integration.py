@@ -462,13 +462,23 @@ def test_notification_deduplication(env):
 
 
 def test_dry_run_writes_no_snapshots(env):
+    """A dry run computes the outcome but persists nothing at all.
+
+    No snapshot object, no version row, no change event, and no update to the
+    asset pointer: `latest_hash` must stay None because nothing was recorded.
+    """
     server, store, snapshots, runner, asset_id, _ = env
     runner.settings.dry_run = True
 
     report = runner.run()
 
     assert snapshots.objects == {}
-    assert store.get_asset(asset_id).latest_hash is not None
+    assert store.get_latest_versions(asset_id) == []
+    assert store.change_events == []
+    assert store.get_asset(asset_id).latest_hash is None
+    # The outcome is still reported so the operator sees what *would* happen.
+    assert report.assets_checked == 1
+    assert report.outcomes[0].status == "baseline"
 
 
 # --- report shape --------------------------------------------------------

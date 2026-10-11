@@ -221,7 +221,10 @@ class InMemoryStore(Store):
 
     def get_latest_versions(self, asset_id, *, limit=2):
         rows = [v for v in self.versions.values() if v["asset_id"] == asset_id]
-        rows.sort(key=lambda v: v["captured_at"], reverse=True)
+        # Mirror the SQL contract: captured_at DESC, then id DESC as a
+        # deterministic tiebreak. Versions captured inside the same second
+        # would otherwise come back in dict-iteration order.
+        rows.sort(key=lambda v: (v["captured_at"], v["id"]), reverse=True)
         return [
             VersionRow(
                 id=v["id"], asset_id=v["asset_id"], sha256_hash=v["sha256_hash"],

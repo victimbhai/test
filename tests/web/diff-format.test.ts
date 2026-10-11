@@ -74,7 +74,6 @@ describe("buildSideBySide", () => {
 
     const rows = buildSideBySide(parseUnifiedDiff(unified));
 
-    const changed = rows.filter((row) => row.left || row.right);
     // 2 removals vs 3 additions -> 3 paired rows.
     const paired = rows.filter(
       (row) => row.left?.kind === "removed" || row.right?.kind === "added",

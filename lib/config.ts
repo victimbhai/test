@@ -16,6 +16,18 @@ export interface SupabaseConfig {
 
 let cachedConfig: SupabaseConfig | null | undefined;
 
+/**
+ * Drop the cached configuration.
+ *
+ * The caches below are module-level so a serverless invocation reads env once.
+ * Tests (and `next dev` HMR) can change the environment after import, so they
+ * need a way to invalidate that memo. Never call this from application code.
+ */
+export function __resetConfigCacheForTests(): void {
+  cachedConfig = undefined;
+  cachedGithub = undefined;
+}
+
 export function getSupabaseConfig(): SupabaseConfig | null {
   if (cachedConfig !== undefined) return cachedConfig;
 

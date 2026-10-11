@@ -34,7 +34,11 @@ export default function ChangesPage() {
     params.get("project"),
   );
   const { data, isLoading } = useChanges(projectId);
-  const [selectedId, setSelectedId] = useState<string | null>(initialChange);
+  // The selection is derived, not synced: arriving with ?id= opens that diff
+  // directly, and local navigation overrides it. This avoids a cascading
+  // render that an effect-driven setState would cause.
+  const [manualSelection, setManualSelection] = useState<string | null>(null);
+  const selectedId = manualSelection ?? initialChange;
 
   const changes = (data?.changes ?? []) as RecentChange[];
   const projects = projectsData?.projects ?? [];
@@ -43,13 +47,8 @@ export default function ChangesPage() {
     ? changes.filter((change) => change.asset_id === assetFilter)
     : changes;
 
-  // Open the diff view when arriving with ?id=...
-  useEffect(() => {
-    if (initialChange) setSelectedId(initialChange);
-  }, [initialChange]);
-
   if (selectedId) {
-    return <ChangeDetail id={selectedId} onBack={() => setSelectedId(null)} />;
+    return <ChangeDetail id={selectedId} onBack={() => setManualSelection(null)} />;
   }
 
   return (
@@ -103,7 +102,7 @@ export default function ChangesPage() {
                 <ChangeRow
                   key={change.id}
                   change={change}
-                  onOpen={() => setSelectedId(change.id)}
+                  onOpen={() => setManualSelection(change.id)}
                 />
               ))}
             </div>

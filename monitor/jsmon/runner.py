@@ -412,26 +412,50 @@ class ScanRunner:
                 )
                 previous_bytes = b""
 
-        # 5. store the new snapshot, then the new version row
+        # 5. store the new snapshot, then the new version row.
+        #    Dry run: compute and report the outcome, but persist nothing — no
+        #    snapshot, no version row, no change event, no pointer update.
         object_path = self.snapshots.object_path(asset.id, result.sha256)
-        if not self.settings.dry_run:
-            try:
-                self.snapshots.upload(
-                    object_path,
-                    result.body,
-                    content_type=result.content_type or "text/javascript",
-                )
-            except Exception as exc:
-                LOG.error("snapshot upload failed for %s: %s", asset.url, exc)
-                return AssetOutcome(
-                    asset_id=asset.id,
-                    url=asset.url,
-                    status="error",
-                    detail=f"snapshot upload failed: {exc}",
-                    http_status=result.status,
-                    new_hash=result.sha256,
-                    old_hash=previous_hash,
-                )
+        if self.settings.dry_run:
+            diff = build_diff(
+                previous_bytes if previous_bytes else None, result.body
+            )
+            status = "baseline" if (previous_version is None or not previous_hash) else "changed"
+            LOG.info(
+                "dry run: would record %s for %s (%s)",
+                status,
+                asset.url,
+                result.sha256_prefix,
+            )
+            return AssetOutcome(
+                asset_id=asset.id,
+                url=asset.url,
+                status=status,
+                http_status=result.status,
+                new_hash=result.sha256,
+                old_hash=previous_hash,
+                size=result.size,
+                previous_size=previous_size,
+                indicators=diff.indicators,
+            )
+
+        try:
+            self.snapshots.upload(
+                object_path,
+                result.body,
+                content_type=result.content_type or "text/javascript",
+            )
+        except Exception as exc:
+            LOG.error("snapshot upload failed for %s: %s", asset.url, exc)
+            return AssetOutcome(
+                asset_id=asset.id,
+                url=asset.url,
+                status="error",
+                detail=f"snapshot upload failed: {exc}",
+                http_status=result.status,
+                new_hash=result.sha256,
+                old_hash=previous_hash,
+            )
 
         version = self.store.insert_version(
             asset_id=asset.id,
