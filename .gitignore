@@ -44,3 +44,7 @@ next-env.d.ts
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# npm
+npm-install.log
+npm-debug.log*
