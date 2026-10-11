@@ -1,0 +1,173 @@
+name: JSMon Monitor
+
+# Scheduled JavaScript change monitoring.
+#
+# IMPORTANT ARCHITECTURE
+#   This workflow is the ONLY place the Python monitoring engine runs. Vercel
+#   hosts the dashboard and its API routes; it never runs a background worker.
+#
+#   Data flow:  cron/dispatch -> this runner -> Supabase (state + snapshots)
+#               Supabase -> dashboard (reads, live-refreshed)
+#
+#   A monitoring run therefore NEVER triggers a Vercel deployment, and a code
+#   push (which does deploy) never runs a scan. The two are fully decoupled.
+
+on:
+  schedule:
+    # Every 15 minutes, staggered to :07/:22/:37/:52 so the run does not land
+    # on the busiest minute of the hour. GitHub queues scheduled runs when the
+    # repository is idle, so treat the interval as a lower bound.
+    - cron: "7,22,37,52 * * * *"
+
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "Optional project UUID to limit the scan"
+        required: false
+        type: string
+      asset_id:
+        description: "Optional asset UUID to scan a single target"
+        required: false
+        type: string
+      full_scan:
+        description: "Scan every eligible enabled target (default true)"
+        required: false
+        type: boolean
+        default: true
+      notify:
+        description: "Send notifications for detected changes"
+        required: false
+        type: boolean
+        default: true
+      dry_run:
+        description: "Compute changes without writing snapshots or results"
+        required: false
+        type: boolean
+        default: false
+
+# Concurrency control: never let two scans overlap, which would race on
+# snapshot history. A queued run supersedes the previous one for the same
+# concurrency group rather than queueing up behind it.
+concurrency:
+  group: jsmon-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  # Which table the runner writes to; changing this requires a migration.
+  JSMON_STORAGE_BUCKET: js-snapshots
+
+jobs:
+  monitor:
+    name: Scan enabled JavaScript assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: monitor/requirements.txt
+
+      - name: Install pinned dependencies
+        working-directory: monitor
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate required configuration
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python - <<'PY'
+          import os, sys
+          required = {
+              "NEXT_PUBLIC_SUPABASE_URL": "Supabase project URL",
+          }
+          missing = [k for k in required if not os.environ.get(k)]
+          if not os.environ.get("SUPABASE_SECRET_KEY") and not os.environ.get("SUPABASE_DB_URL"):
+              missing.append("SUPABASE_SECRET_KEY (or SUPABASE_DB_URL)")
+          if missing:
+              print("Missing required secrets: " + ", ".join(missing), file=sys.stderr)
+              sys.exit(1)
+          print("configuration OK")
+          PY
+
+      - name: Run monitoring engine
+        id: scan
+        working-directory: monitor
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_STORAGE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          JSMON_STORAGE_BUCKET: ${{ env.JSMON_STORAGE_BUCKET }}
+
+          JSMON_NOTIFY_TELEGRAM: ${{ secrets.JSMON_NOTIFY_TELEGRAM }}
+          JSMON_TELEGRAM_TOKEN: ${{ secrets.JSMON_TELEGRAM_TOKEN }}
+          JSMON_TELEGRAM_CHAT_ID: ${{ secrets.JSMON_TELEGRAM_CHAT_ID }}
+          JSMON_NOTIFY_SLACK: ${{ secrets.JSMON_NOTIFY_SLACK }}
+          JSMON_SLACK_TOKEN: ${{ secrets.JSMON_SLACK_TOKEN }}
+          JSMON_SLACK_CHANNEL_ID: ${{ secrets.JSMON_SLACK_CHANNEL_ID }}
+
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          JSMON_MAX_BYTES: ${{ secrets.JSMON_MAX_BYTES }}
+          JSMON_MAX_VERSIONS_PER_ASSET: ${{ secrets.JSMON_MAX_VERSIONS_PER_ASSET }}
+          JSMON_MAX_REDIRECTS: ${{ secrets.JSMON_MAX_REDIRECTS }}
+          JSMON_HOST_ALLOWLIST: ${{ secrets.JSMON_HOST_ALLOWLIST }}
+          JSMON_TRIGGER_TYPE: ${{ github.event_name == 'schedule' && 'schedule' || 'workflow_dispatch' }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -uo pipefail
+          ARGS=""
+          if [ -n "${{ inputs.project_id }}" ]; then
+            ARGS="$ARGS --project-id ${{ inputs.project_id }}"
+          fi
+          if [ -n "${{ inputs.asset_id }}" ]; then
+            ARGS="$ARGS --asset-id ${{ inputs.asset_id }}"
+          fi
+          if [ "${{ inputs.notify }}" = "false" ]; then
+            ARGS="$ARGS --no-notify"
+          fi
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            :
+          elif [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+
+          echo "Running: python runner.py${ARGS}"
+          python runner.py ${ARGS} | tee scan-output.txt
+          echo "scan_exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload scan log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jsmon-scan-${{ github.run_id }}
+          path: monitor/scan-output.txt
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Report outcome
+        if: always()
+        run: |
+          EXIT="${{ steps.scan.outputs.scan_exit }}"
+          echo "monitoring engine exit code: ${EXIT:-unknown}"
+          # A partial run (some assets errored) is a successful job: the scan
+          # completed and results were recorded. Only a hard failure exits 1.
+          if [ "${EXIT:-0}" = "1" ]; then
+            echo "::error::Monitoring run failed; see the scan log artifact."
+            exit 1
+          fi
+          echo "Monitoring run recorded in Supabase."
