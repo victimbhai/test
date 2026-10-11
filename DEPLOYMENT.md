@@ -115,13 +115,21 @@ workflow validates this before it starts and exits with a clear error.
 
 ### Token permissions
 
-For `GITHUB_ACCESS_TOKEN` (Vercel, not GitHub secrets), create a fine-grained
-token scoped to **this repository only**:
+For `GITHUB_ACCESS_TOKEN` (a Vercel environment variable, **not** a GitHub
+secret), create a fine-grained personal access token at
+[github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens):
 
-- **Permissions → Actions: Read and Write** — write to dispatch, read to poll.
+- **Resource owner:** your account
+- **Repository access:** only this repository
+- **Permissions → Repository permissions:**
+  - **Actions: Read and write** — *write* is required to dispatch a workflow;
+    read is required to poll run status. Without write the dispatch is
+    refused and targets stay Pending.
+  - **Contents: Read** — required so the token can resolve the repository.
+  - **Metadata: Read** — required by the API for every request.
 
 A GitHub App installation token works too and is preferable for longer-lived
-automation.
+automation, since PATs expire.
 
 ## 7. Enable scheduled GitHub Actions
 
@@ -179,7 +187,19 @@ Project → Settings → Environment Variables. Apply to **Production** (and
 | `GITHUB_WORKFLOW_ID` | `jsmon-monitor.yml` |
 | `GITHUB_WORKFLOW_REF` | `main` |
 | `GITHUB_ACCESS_TOKEN` | fine-grained PAT with Actions read/write |
-| `CRON_SECRET` | any long random string |
+| `CRON_SECRET` | a long random string — **required** |
+
+`CRON_SECRET` is required for the automatic trigger to work. The Vercel Cron
+jobs that deliver queued scans authenticate with it, and the drain route
+accepts *only* that bearer token — a browser session is deliberately not
+enough. If you skip it, targets you add from the website will stay **Pending**
+until a scheduled GitHub Actions run picks them up.
+
+Generate one:
+
+```bash
+openssl rand -hex 32
+```
 
 The split matters: `NEXT_PUBLIC_*` values are inlined into the JavaScript
 bundle, so anything sensitive must never carry that prefix.
@@ -215,8 +235,21 @@ to Supabase instead, so **a scan never creates a deployment**.
 | `/api/dispatch/drain` | every 5 minutes | deliver queued scans to GitHub |
 | `/api/dispatch/drain?mode=reconcile` | every 2 minutes | poll GitHub and update job status |
 
-Vercel sends `CRON_SECRET` as a bearer token, which the route checks. If you
-set a custom `CRON_SECRET`, use the same value in Vercel.
+Vercel sends `CRON_SECRET` as a bearer token, which the route checks. Set the
+same value in Vercel environment variables — if you leave it unset the crons
+cannot authenticate and queued scans are never delivered.
+
+Cron jobs only run on Vercel's **paid** plans. On the Hobby plan they are
+disabled, so trigger the drain manually after adding a target:
+
+```bash
+curl -X POST https://<your-project>.vercel.app/api/dispatch/drain \
+  -H "Authorization: Bearer <CRON_SECRET>"
+```
+
+The scan still completes without them: the scheduled GitHub Actions workflow
+picks up any target that is still pending, and **Run Scan Now** drains
+immediately. The crons only remove the wait.
 
 Confirm they are registered: Project → Settings → **Cron Jobs**.
 

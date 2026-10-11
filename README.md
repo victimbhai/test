@@ -32,6 +32,24 @@ and a deployment never runs a scan.
 
 ---
 
+## Deploy it
+
+Full walkthrough in [DEPLOYMENT.md](./DEPLOYMENT.md). In short — four
+services, about 30 minutes:
+
+| # | Service | What you do |
+| --- | --- | --- |
+| 1 | **GitHub** | Push this repo. Enable Actions once. Add the Supabase secrets. |
+| 2 | **Supabase** | Create a project, run the three migrations in `supabase/migrations/`, create a private `js-snapshots` bucket, create your admin user. |
+| 3 | **Vercel** | Import the repo. Set the env vars. |
+| 4 | **Verify** | Sign in, add a target, watch the status go Queued → Running → Completed. |
+
+Two env vars matter most: `CRON_SECRET` (lets Vercel Cron deliver queued
+scans) and `GITHUB_ACCESS_TOKEN` with Actions **write** on the repo (without
+write the dispatch is refused).
+
+---
+
 ## What it does
 
 - **Monitor any authorized JavaScript URL.** First scan creates a baseline;
